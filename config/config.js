@@ -11,6 +11,9 @@ export const config = {
     bucket: process.env.SUPABASE_BUCKET || 'documentos',
   },
   ia: {
+    apiKey: process.env.ANTHROPIC_API_KEY || '',
+    // Fase actual: IA pendiente. Se activa sola al definir ANTHROPIC_API_KEY.
+    habilitada: Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
     model: process.env.ANTHROPIC_MODEL || 'claude-opus-5-5',
   },
   // Plazos del procedimiento de Gestión Humana

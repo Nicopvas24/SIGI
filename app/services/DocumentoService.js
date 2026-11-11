@@ -31,8 +31,9 @@ export const DocumentoService = {
       const { error } = await supabase.storage
         .from(config.supabase.bucket)
         .upload(ruta, archivo.buffer, { contentType: archivo.mimetype, upsert: true });
+      // El bucket es privado (soportes con información clínica reservada):
+      // se guarda la referencia storage:// y se accede con URLs firmadas.
       if (error) console.warn('[DocumentoService] Storage:', error.message);
-      else url = supabase.storage.from(config.supabase.bucket).getPublicUrl(ruta).data.publicUrl;
     }
 
     return repoDocumentos.crear({

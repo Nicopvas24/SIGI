@@ -5,6 +5,7 @@ import {
 } from '../repositories/index.js';
 import { ReglasIncapacidadService } from '../services/ReglasIncapacidadService.js';
 import { IaOcrService } from '../services/IaOcrService.js';
+import { config } from '../../config/config.js';
 import { cambiarEstado, asyncHandler } from './_helpers.js';
 
 export const TranscripcionController = {
@@ -154,7 +155,9 @@ export const TranscripcionController = {
     };
 
     let analisis_ia = null;
-    if (req.query.ia === 'true') {
+    if (req.query.ia === 'true' && !config.ia.habilitada) {
+      analisis_ia = { pendiente: true, mensaje: 'Módulo de IA pendiente de configurar.' };
+    } else if (req.query.ia === 'true') {
       analisis_ia = await IaOcrService.analizarAusentismo({
         periodo, resumen,
         registros: registros.map(({ colaborador, ...r }) => r), // anonimizado para la IA

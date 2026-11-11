@@ -12,7 +12,9 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-app.get('/api/salud', (_req, res) => res.json({ ok: true, sistema: 'SIGI', fecha: new Date().toISOString() }));
+app.get('/api/salud', (_req, res) =>
+  res.json({ ok: true, sistema: 'SIGI', ia: config.ia.habilitada ? 'activa' : 'pendiente', fecha: new Date().toISOString() })
+);
 app.use('/api', rutas);
 
 // Vistas compiladas (React) servidas desde public/

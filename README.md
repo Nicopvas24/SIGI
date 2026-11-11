@@ -31,11 +31,13 @@ sigi/
 
 ## Puesta en marcha
 
-1. **Crear el proyecto en Supabase** y, en el *SQL Editor*, ejecutar en orden:
-   - `database/migrations/001_esquema_inicial.sql`
-   - `database/seeders/001_datos_iniciales.sql`
-2. En *Storage*, crear un bucket llamado `documentos` (para los soportes escaneados).
-3. Copiar `.env.example` a `.env` y completar `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` y `ANTHROPIC_API_KEY`. Dejar `DEMO_MODE=true` para probar sin configurar Supabase Auth.
+1. **Configurar Supabase automáticamente.** Crear un token personal en <https://supabase.com/dashboard/account/tokens> y ejecutar:
+   ```bash
+   SUPABASE_ACCESS_TOKEN=sbp_... npm run db:setup -- <project-ref>
+   ```
+   El script aplica `database/migrations/*.sql` y `database/seeders/*.sql` (cada uno una sola vez, registrado en `_sigi_migraciones`), crea el bucket privado `documentos`, activa RLS en todas las tablas y escribe `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` en `.env`. El token no se guarda.
+   *(Alternativa manual: ejecutar los `.sql` en orden en el SQL Editor y copiar `.env.example` a `.env`.)*
+2. `ANTHROPIC_API_KEY` es **opcional / pendiente**: sin ella todo el sistema funciona y solo los endpoints de IA responden `503`. `GET /api/salud` indica `"ia": "pendiente"` o `"activa"`. Dejar `DEMO_MODE=true` para probar sin configurar Supabase Auth.
 4. Instalar y ejecutar:
 
 ```bash

@@ -10,11 +10,24 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../../config/config.js';
 
-const client = new Anthropic(); // lee ANTHROPIC_API_KEY del entorno
 const MODEL = config.ia.model;
 
+// El cliente se crea solo cuando hay ANTHROPIC_API_KEY. Sin clave, el resto
+// del sistema funciona normal y los endpoints de IA responden 503 (pendiente).
+let client = null;
+function obtenerCliente() {
+  if (!config.ia.habilitada) {
+    throw Object.assign(
+      new Error('El módulo de IA aún no está configurado (falta ANTHROPIC_API_KEY en .env).'),
+      { status: 503 }
+    );
+  }
+  client ??= new Anthropic({ apiKey: config.ia.apiKey });
+  return client;
+}
+
 async function pedirJSON({ system, contenido, maxTokens = 8000 }) {
-  const response = await client.messages.create({
+  const response = await obtenerCliente().messages.create({
     model: MODEL,
     max_tokens: maxTokens,
     thinking: { type: 'adaptive' },

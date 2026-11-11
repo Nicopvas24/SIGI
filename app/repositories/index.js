@@ -22,7 +22,7 @@ export const repoNotificaciones = new BaseRepository('notificaciones');
 export const SELECT_INCAPACIDAD = `
   *,
   colaborador:colaboradores(id, cargo, area, ibc,
-    usuario:usuarios(id, nombre, documento, correo)),
+    usuario:usuarios!usuario_id(id, nombre, documento, correo)),
   entidad:entidades(*),
   documentos:documentos_soporte(*),
   recepciones(*),
