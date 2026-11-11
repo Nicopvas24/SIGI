@@ -1,19 +1,26 @@
 // Vista Transcripción y radicación (CU-11 a CU-15) + reporte SG-SST (CU-16)
 import { useEffect, useState } from 'react';
+import { ExternalLink, Mail, Monitor, Stamp } from 'lucide-react';
 import { api } from '../api.js';
+import { Aviso, Encabezado, Panel, PanelIA, Vacio, tipo, useDialogo } from '../ui.jsx';
 
 export default function Transcripcion() {
-  const [casos, setCasos] = useState([]);
+  const dlg = useDialogo();
+  const [casos, setCasos] = useState(null);
   const [msj, setMsj] = useState(null);
   const [sgsst, setSgsst] = useState(null);
   const [periodo, setPeriodo] = useState(new Date().toISOString().slice(0, 7));
-  const [cargandoIA, setCargandoIA] = useState(false);
+  const [cargando, setCargando] = useState(null);
 
-  const cargar = () => api('/transcripcion/pendientes').then(setCasos).catch((e) => setMsj({ t: 'error', m: e.message }));
+  const cargar = () => api('/transcripcion/pendientes').then(setCasos).catch((e) => { setCasos([]); setMsj({ t: 'error', m: e.message }); });
   useEffect(() => { cargar(); }, []);
 
   async function transcribir(caso) {
-    const numero = prompt(`Transcribir ${caso.numero_caso} por ${caso.canal_entidad === 'PORTAL_WEB' ? 'PORTAL WEB (CU-12)' : 'CORREO (CU-13)'}.\nNúmero o constancia de transcripción:`);
+    const porPortal = caso.canal_entidad === 'PORTAL_WEB';
+    const numero = await dlg.pedirTexto(`Transcribir ${caso.numero_caso}`, 'Número o constancia de transcripción', '', {
+      descripcion: `Canal de ${caso.entidad?.nombre}: ${porPortal ? 'portal web' : 'correo electrónico'}.`,
+      textoAceptar: 'Registrar transcripción',
+    });
     if (!numero) return;
     try {
       const r = await api(`/incapacidades/${caso.id}/transcribir`, {
@@ -26,7 +33,10 @@ export default function Transcripcion() {
   }
 
   async function radicar(caso) {
-    const numero = prompt(`Radicar ${caso.numero_caso} ante ${caso.entidad?.nombre}.\nNúmero de radicado:`);
+    const numero = await dlg.pedirTexto(`Radicar ${caso.numero_caso}`, 'Número de radicado', '', {
+      descripcion: `Radicación ante ${caso.entidad?.nombre}. La evidencia queda asociada a la gestión.`,
+      textoAceptar: 'Radicar',
+    });
     if (!numero) return;
     try {
       const r = await api(`/incapacidades/${caso.id}/radicar`, {
@@ -39,73 +49,117 @@ export default function Transcripcion() {
   }
 
   async function reporteSGSST(conIA) {
-    setCargandoIA(Boolean(conIA));
+    setCargando(conIA ? 'ia' : 'reporte');
     try {
       setSgsst(await api(`/sgsst/reporte?periodo=${periodo}${conIA ? '&ia=true' : ''}`));
     } catch (e) { setMsj({ t: 'error', m: e.message }); }
-    finally { setCargandoIA(false); }
+    finally { setCargando(null); }
   }
+
+  const ia = sgsst?.analisis_ia && !sgsst.analisis_ia.pendiente ? sgsst.analisis_ia : null;
 
   return (
     <div>
-      <h2>Bandeja: por transcribir / radicar (CU-11 a CU-15)</h2>
-      {msj && <div className={`alerta ${msj.t}`}>{msj.m}</div>}
-      <div className="tarjeta">
-        <table>
-          <thead><tr>
-            <th>Caso</th><th>Entidad</th><th>Canal</th><th>Plazo restante</th><th>Acciones</th>
-          </tr></thead>
-          <tbody>
-            {casos.map((c) => (
-              <tr key={c.id} style={c.prioritario ? { background: '#fff7ed' } : undefined}>
-                <td>{c.numero_caso} · {c.colaborador?.usuario?.nombre}<br />
-                  <small>{c.tipo.replaceAll('_', ' ')} · {c.dias} día(s)</small></td>
-                <td>{c.entidad?.nombre}{c.entidad?.portal_url && <><br /><a href={c.entidad.portal_url} target="_blank" rel="noreferrer">Portal ↗</a></>}</td>
-                <td>{c.canal_entidad === 'PORTAL_WEB' ? 'Portal web' : 'Correo'}</td>
-                <td>
-                  {c.plazo_vencido
-                    ? <b style={{ color: '#c0392b' }}>VENCIDO (revisión coordinación)</b>
-                    : <>{c.plazo_restante_dias} día(s) {c.prioritario && <b style={{ color: '#b7791f' }}>· PRIORITARIO</b>}</>}
-                </td>
-                <td>
-                  <button onClick={() => transcribir(c)} disabled={c.plazo_vencido}>Transcribir</button>
-                  <button className="secundario" onClick={() => radicar(c)}>Radicar</button>
-                </td>
-              </tr>
-            ))}
-            {!casos.length && <tr><td colSpan={5}>No hay casos VERIFICADA pendientes.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+      <Encabezado
+        titulo="Transcripción y radicación"
+        descripcion="Casos verificados por transcribir ante la entidad, ordenados por el plazo que les queda."
+        refs={['CU-11', 'CU-16']}
+      />
+      <Aviso msj={msj} onCerrar={() => setMsj(null)} />
 
-      <div className="tarjeta">
-        <h3>CU-16 · Reporte de ausentismo al SG-SST</h3>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input type="month" style={{ width: 180 }} value={periodo} onChange={(e) => setPeriodo(e.target.value)} />
-          <button onClick={() => reporteSGSST(false)}>Generar reporte</button>
-          <button className="secundario" onClick={() => reporteSGSST(true)}>
-            {cargandoIA ? 'IA analizando…' : '🤖 Reporte + análisis IA'}
-          </button>
-        </div>
-        {sgsst && (
-          <div style={{ marginTop: 12 }}>
-            <div className="fila-tarjetas">
-              <div className="kpi"><div className="valor">{sgsst.resumen.total_incapacidades}</div><div className="titulo">Incapacidades</div></div>
-              <div className="kpi"><div className="valor">{sgsst.resumen.dias_perdidos}</div><div className="titulo">Días perdidos</div></div>
-              <div className="kpi"><div className="valor">{sgsst.resumen.indice_frecuencia}</div><div className="titulo">Índice frecuencia</div></div>
-              <div className="kpi"><div className="valor">{sgsst.resumen.indice_severidad}</div><div className="titulo">Índice severidad</div></div>
-            </div>
-            {sgsst.analisis_ia && (
-              <div className="ia-caja">
-                <h4>🤖 Análisis de ausentismo con IA</h4>
-                <p>{sgsst.analisis_ia.resumen_ejecutivo}</p>
-                {sgsst.analisis_ia.hallazgos?.length > 0 && <><b>Hallazgos</b><ul>{sgsst.analisis_ia.hallazgos.map((h, i) => <li key={i}>{h}</li>)}</ul></>}
-                {sgsst.analisis_ia.recomendaciones_sgsst?.length > 0 && <><b>Recomendaciones SG-SST</b><ul>{sgsst.analisis_ia.recomendaciones_sgsst.map((h, i) => <li key={i}>{h}</li>)}</ul></>}
-              </div>
-            )}
+      <Panel titulo="Por transcribir o radicar" sub={casos ? `${casos.length} caso(s)` : 'Cargando…'} cuerpo={false}>
+        {casos?.length ? (
+          <div className="tabla-wrap">
+            <table>
+              <thead><tr><th>Caso</th><th>Entidad</th><th>Canal</th><th>Plazo</th><th className="th-acciones">Acciones</th></tr></thead>
+              <tbody>
+                {casos.map((c) => (
+                  <tr key={c.id} className={c.plazo_vencido ? 'fila-alerta' : ''}>
+                    <td>
+                      <span className="caso">{c.numero_caso}</span>
+                      <span className="secundario-texto">{c.colaborador?.usuario?.nombre} · {tipo(c.tipo)} · {c.dias} día(s)</span>
+                    </td>
+                    <td>
+                      {c.entidad?.nombre}
+                      {c.entidad?.portal_url && (
+                        <a className="secundario-texto" href={c.entidad.portal_url} target="_blank" rel="noreferrer">
+                          Abrir portal <ExternalLink size={12} aria-hidden="true" />
+                        </a>
+                      )}
+                    </td>
+                    <td>
+                      <span className="exp-meta" style={{ marginTop: 0 }}>
+                        <span>{c.canal_entidad === 'PORTAL_WEB'
+                          ? <><Monitor size={14} aria-hidden="true" />Portal web</>
+                          : <><Mail size={14} aria-hidden="true" />Correo</>}</span>
+                      </span>
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {c.plazo_vencido
+                        ? <><span className="sello alerta">Vencido</span><span className="secundario-texto">Requiere revisión de coordinación</span></>
+                        : c.prioritario
+                          ? <><span className="resaltado">Quedan {c.plazo_restante_dias} días</span><span className="secundario-texto">Prioritario</span></>
+                          : <>Quedan {c.plazo_restante_dias} días</>}
+                    </td>
+                    <td>
+                      <div className="acciones">
+                        <button className="secundario" onClick={() => radicar(c)}>Radicar</button>
+                        <button onClick={() => transcribir(c)} disabled={c.plazo_vencido}>Transcribir</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+        ) : casos && (
+          <Vacio icono={Stamp} titulo="Nada por transcribir">
+            Los casos llegan aquí cuando quedan verificados. Los plazos por entidad se calculan solos.
+          </Vacio>
         )}
-      </div>
+      </Panel>
+
+      <Panel
+        titulo="Reporte de ausentismo al SG-SST"
+        sub="Resumen mensual de incapacidades, días perdidos e índices."
+        extra={
+          <div className="en-linea">
+            <input type="month" aria-label="Periodo" style={{ width: 170 }} value={periodo} onChange={(e) => setPeriodo(e.target.value)} />
+            <button onClick={() => reporteSGSST(false)} disabled={cargando === 'reporte'}>
+              {cargando === 'reporte' ? 'Generando…' : 'Generar reporte'}
+            </button>
+          </div>
+        }
+      >
+        {sgsst ? (
+          <div className="regla-hitos cuatro">
+            {[
+              ['Incapacidades', sgsst.resumen.total_incapacidades, 'Eventos del periodo'],
+              ['Días perdidos', sgsst.resumen.dias_perdidos, 'Suma de días'],
+              ['Índice de frecuencia', sgsst.resumen.indice_frecuencia, 'Eventos por periodo'],
+              ['Índice de severidad', sgsst.resumen.indice_severidad, 'Días perdidos por periodo'],
+            ].map(([t, n, q]) => (
+              <div key={t}><div className="dia">{t}</div><div className={`n ${n ? '' : 'cero'}`}>{n}</div><div className="que">{q}</div></div>
+            ))}
+          </div>
+        ) : (
+          <p className="texto-tenue">Elija el periodo y genere el reporte.</p>
+        )}
+
+        <PanelIA
+          titulo="Análisis de ausentismo"
+          descripcion="Hallazgos, patrones y recomendaciones para el SG-SST. Los diagnósticos se envían agrupados y sin nombres."
+          accion="Analizar con IA"
+          cargando={cargando === 'ia'}
+          onEjecutar={() => reporteSGSST(true)}
+        >
+          {ia && <>
+            <p>{ia.resumen_ejecutivo}</p>
+            {ia.hallazgos?.length > 0 && <><h4>Hallazgos</h4><ul>{ia.hallazgos.map((h, i) => <li key={i}>{h}</li>)}</ul></>}
+            {ia.recomendaciones_sgsst?.length > 0 && <><h4>Recomendaciones</h4><ul>{ia.recomendaciones_sgsst.map((h, i) => <li key={i}>{h}</li>)}</ul></>}
+          </>}
+        </PanelIA>
+      </Panel>
     </div>
   );
 }

@@ -1,19 +1,22 @@
 // Vista Conciliación contable (CU-24, CU-25)
 import { useEffect, useState } from 'react';
+import { ArrowLeftRight, ArrowRight } from 'lucide-react';
 import { api, sesion } from '../api.js';
+import { Aviso, Encabezado, Panel, Vacio, dinero, fecha, useDialogo } from '../ui.jsx';
 
 export default function Conciliacion() {
   const rol = sesion()?.usuario?.rol;
+  const dlg = useDialogo();
   const [periodo, setPeriodo] = useState(new Date().toISOString().slice(0, 7));
   const [estado, setEstado] = useState(null);
-  const [propuestas, setPropuestas] = useState([]);
+  const [propuestas, setPropuestas] = useState(null);
   const [entidades, setEntidades] = useState([]);
   const [nueva, setNueva] = useState({ entidad_id: '', valor: '', fecha_pago: '' });
   const [msj, setMsj] = useState(null);
 
   const cargar = () => {
     api(`/conciliacion?periodo=${periodo}`).then(setEstado).catch((e) => setMsj({ t: 'error', m: e.message }));
-    api('/conciliacion/coincidencias').then(setPropuestas).catch(() => {});
+    api('/conciliacion/coincidencias').then(setPropuestas).catch(() => setPropuestas([]));
   };
   useEffect(() => { cargar(); api('/entidades').then(setEntidades).catch(() => {}); }, [periodo]);
 
@@ -24,7 +27,7 @@ export default function Conciliacion() {
         method: 'POST',
         body: { periodo, consignaciones: [{ ...nueva, entidad_id: Number(nueva.entidad_id), valor: Number(nueva.valor) }] },
       });
-      setMsj({ t: 'ok', m: 'Consignación registrada (por identificar).' });
+      setMsj({ t: 'ok', m: 'Consignación registrada como por identificar.' });
       setNueva({ entidad_id: '', valor: '', fecha_pago: '' });
       cargar();
     } catch (err) { setMsj({ t: 'error', m: err.message }); }
@@ -33,7 +36,7 @@ export default function Conciliacion() {
   async function confirmar(pagoId, incapacidadId) {
     try {
       const r = await api('/conciliacion/confirmar', { method: 'POST', body: { pago_id: pagoId, incapacidad_id: incapacidadId } });
-      setMsj({ t: r.alerta ? 'error' : 'ok', m: `Pago identificado. Estado: ${r.estado_caso}. Saldo: $${r.saldo_pendiente}. ${r.nota || ''} ${r.alerta || ''}` });
+      setMsj({ t: r.alerta ? 'error' : 'ok', m: `Pago identificado. Estado: ${r.estado_caso}. Saldo: ${dinero(r.saldo_pendiente)}. ${r.nota || ''} ${r.alerta || ''}` });
       cargar();
     } catch (err) { setMsj({ t: 'error', m: err.message }); }
   }
@@ -44,52 +47,101 @@ export default function Conciliacion() {
       setMsj({ t: 'ok', m: r.mensaje });
       cargar();
     } catch (err) {
-      if (err.status === 409 && window.confirm(`${err.message}. ¿Cerrar de todas formas?`)) return cerrar(true);
+      if (err.status === 409 && await dlg.confirmar('¿Cerrar el periodo de todas formas?', err.message, { textoAceptar: 'Cerrar periodo', peligro: true })) {
+        return cerrar(true);
+      }
       setMsj({ t: 'error', m: err.message });
     }
   }
 
+  const conc = estado?.conciliacion;
+  const puedeCargar = ['CONTABILIDAD', 'AUXILIAR', 'ADMIN'].includes(rol);
+
   return (
     <div>
-      <h2>Conciliación de pagos con Contabilidad (CU-24)</h2>
-      {msj && <div className={`alerta ${msj.t}`}>{msj.m}</div>}
-      <div className="tarjeta" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-        <label style={{ margin: 0 }}>Periodo</label>
-        <input type="month" style={{ width: 180 }} value={periodo} onChange={(e) => setPeriodo(e.target.value)} />
-        <span>Estado: <b>{estado?.conciliacion?.estado || 'Sin abrir'}</b> · Total consignado: ${Number(estado?.conciliacion?.total_consignado || 0).toLocaleString()}</span>
-        {(rol === 'CONTABILIDAD' || rol === 'ADMIN') && estado?.conciliacion?.estado === 'ABIERTA' &&
-          <button onClick={() => cerrar()}>Conciliar y cerrar periodo</button>}
-      </div>
+      <Encabezado
+        titulo="Conciliación de pagos"
+        descripcion="Cruce de las consignaciones de cada entidad con los casos cobrados, por periodo contable."
+        refs={['CU-24', 'CU-25']}
+      >
+        <input type="month" aria-label="Periodo" style={{ width: 170 }} value={periodo} onChange={(e) => setPeriodo(e.target.value)} />
+      </Encabezado>
+      <Aviso msj={msj} onCerrar={() => setMsj(null)} />
 
-      {(rol === 'CONTABILIDAD' || rol === 'AUXILIAR' || rol === 'ADMIN') && (
-        <form className="tarjeta form-grid" onSubmit={cargarConsignacion}>
-          <h3 style={{ gridColumn: '1 / -1', margin: 0 }}>Cargar consignación de la entidad</h3>
-          <div><label>Entidad</label>
-            <select required value={nueva.entidad_id} onChange={(e) => setNueva({ ...nueva, entidad_id: e.target.value })}>
-              <option value="">Seleccione…</option>
-              {entidades.map((en) => <option key={en.id} value={en.id}>{en.nombre}</option>)}
-            </select></div>
-          <div><label>Valor</label><input type="number" required value={nueva.valor} onChange={(e) => setNueva({ ...nueva, valor: e.target.value })} /></div>
-          <div><label>Fecha de pago</label><input type="date" required value={nueva.fecha_pago} onChange={(e) => setNueva({ ...nueva, fecha_pago: e.target.value })} /></div>
-          <div style={{ marginTop: 26 }}><button type="submit">Registrar</button></div>
-        </form>
-      )}
-
-      <div className="tarjeta">
-        <h3>Coincidencias propuestas (pagos por identificar ↔ casos cobrados)</h3>
-        {propuestas.map(({ pago, candidatos }) => (
-          <div key={pago.id} style={{ borderTop: '1px solid #dbe2ea', padding: '8px 0' }}>
-            Pago ${Number(pago.valor).toLocaleString()} del {pago.fecha_pago}
-            {candidatos.length ? candidatos.map((c) => (
-              <div key={c.incapacidad_id} style={{ marginLeft: 16, fontSize: 13 }}>
-                → {c.numero_caso} · {c.colaborador} · esperado ${c.valor_esperado.toLocaleString()} · dif. ${c.diferencia.toLocaleString()}{' '}
-                <button onClick={() => confirmar(pago.id, c.incapacidad_id)}>Confirmar</button>
-              </div>
-            )) : <div style={{ marginLeft: 16, color: '#c0392b', fontSize: 13 }}>Sin candidatos: queda "Por identificar" (contactar asesor de la entidad).</div>}
+      <Panel
+        titulo={`Periodo ${periodo}`}
+        sub={<>Estado: <b>{conc?.estado === 'CONCILIADA' ? 'Conciliado' : conc?.estado === 'ABIERTA' ? 'Abierto' : 'Sin abrir'}</b></>}
+        extra={
+          <div className="en-linea" style={{ alignItems: 'center' }}>
+            <span className="cifra"><small>Total consignado</small>{dinero(conc?.total_consignado)}</span>
+            {(rol === 'CONTABILIDAD' || rol === 'ADMIN') && conc?.estado === 'ABIERTA' &&
+              <button onClick={() => cerrar()}>Conciliar y cerrar periodo</button>}
           </div>
-        ))}
-        {!propuestas.length && <p>No hay pagos por identificar.</p>}
-      </div>
+        }
+        cuerpo={false}
+      >
+        {puedeCargar && (
+          <form className="panel-cuerpo form-grid" onSubmit={cargarConsignacion}>
+            <div className="campo">
+              <label htmlFor="c-ent">Entidad</label>
+              <select id="c-ent" required value={nueva.entidad_id} onChange={(e) => setNueva({ ...nueva, entidad_id: e.target.value })}>
+                <option value="">Seleccione…</option>
+                {entidades.map((en) => <option key={en.id} value={en.id}>{en.nombre}</option>)}
+              </select>
+            </div>
+            <div className="campo">
+              <label htmlFor="c-val">Valor consignado (COP)</label>
+              <input id="c-val" type="number" min="0" required value={nueva.valor} onChange={(e) => setNueva({ ...nueva, valor: e.target.value })} />
+            </div>
+            <div className="campo">
+              <label htmlFor="c-fec">Fecha de pago</label>
+              <input id="c-fec" type="date" required value={nueva.fecha_pago} onChange={(e) => setNueva({ ...nueva, fecha_pago: e.target.value })} />
+            </div>
+            <div className="campo" style={{ justifyContent: 'flex-end' }}>
+              <button type="submit" style={{ minHeight: 36 }}>Registrar consignación</button>
+            </div>
+          </form>
+        )}
+      </Panel>
+
+      <Panel titulo="Coincidencias propuestas" sub="Pagos por identificar y los casos cobrados que podrían corresponderles." cuerpo={false}>
+        {propuestas?.length ? (
+          <ul className="expedientes">
+            {propuestas.map(({ pago, candidatos }) => (
+              <li key={pago.id}>
+                <div className="exp-titulo">
+                  <b>{dinero(pago.valor)}</b><span className="texto-tenue">consignado el {fecha(pago.fecha_pago)}</span>
+                </div>
+                {candidatos.length ? (
+                  <div className="sub-tabla tabla-wrap">
+                    <table>
+                      <thead><tr><th>Caso candidato</th><th className="num">Esperado</th><th className="num">Diferencia</th><th className="th-acciones"></th></tr></thead>
+                      <tbody>
+                        {candidatos.map((c) => (
+                          <tr key={c.incapacidad_id}>
+                            <td><ArrowRight size={13} aria-hidden="true" className="texto-tenue" /> <span className="caso">{c.numero_caso}</span><span className="secundario-texto">{c.colaborador}</span></td>
+                            <td className="num">{dinero(c.valor_esperado)}</td>
+                            <td className={`num ${c.diferencia ? 'texto-alerta' : 'texto-ok'}`}>{dinero(c.diferencia)}</td>
+                            <td><div className="acciones"><button onClick={() => confirmar(pago.id, c.incapacidad_id)}>Confirmar</button></div></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="ayuda" style={{ marginTop: 6 }}>
+                    <span className="sello pendiente">Por identificar</span> Sin casos candidatos: contacte al asesor de la entidad.
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : propuestas && (
+          <Vacio icono={ArrowLeftRight} titulo="No hay pagos por identificar">
+            Al registrar una consignación, el sistema buscará los casos cobrados con valores compatibles.
+          </Vacio>
+        )}
+      </Panel>
     </div>
   );
 }

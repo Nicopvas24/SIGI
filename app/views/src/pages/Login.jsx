@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, guardarSesion } from '../api.js';
+import { Aviso, HITOS } from '../ui.jsx';
+import { Marca } from '../layouts/Layout.jsx';
 
 const DEMOS = [
-  ['colaborador@sigi.demo', 'Colaborador'], ['lider@sigi.demo', 'Líder'],
-  ['recepcion@sigi.demo', 'Recepcionista'], ['auxiliar@sigi.demo', 'Auxiliar Adm. Personal'],
-  ['juridica@sigi.demo', 'Área Jurídica'], ['contabilidad@sigi.demo', 'Contabilidad'],
-  ['documental@sigi.demo', 'Gestión Documental'], ['admin@sigi.demo', 'Admin'],
+  ['auxiliar@sigi.demo', 'Auxiliar de personal'], ['colaborador@sigi.demo', 'Colaborador'],
+  ['lider@sigi.demo', 'Líder de área'], ['recepcion@sigi.demo', 'Recepción'],
+  ['juridica@sigi.demo', 'Área jurídica'], ['contabilidad@sigi.demo', 'Contabilidad'],
+  ['documental@sigi.demo', 'Gestión documental'], ['admin@sigi.demo', 'Administración'],
 ];
 
 export default function Login() {
@@ -14,35 +16,69 @@ export default function Login() {
   const [correo, setCorreo] = useState('auxiliar@sigi.demo');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
+  const [enviando, setEnviando] = useState(false);
 
   async function entrar(e) {
     e?.preventDefault();
     setError(null);
+    setEnviando(true);
     try {
       const r = await api('/auth/login', { method: 'POST', body: { correo, password } });
       guardarSesion(r);
       nav('/');
     } catch (err) {
       setError(err.message);
+    } finally {
+      setEnviando(false);
     }
   }
 
   return (
-    <div className="login">
-      <form className="tarjeta" onSubmit={entrar}>
-        <h2>SIGI</h2>
-        <p>Sistema Integral de Gestión de Incapacidades</p>
-        <label>Correo</label>
-        <input value={correo} onChange={(e) => setCorreo(e.target.value)} />
-        <label>Contraseña (vacía en modo demo)</label>
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-        {error && <div className="alerta error">{error}</div>}
-        <div style={{ marginTop: 14 }}><button type="submit">Ingresar</button></div>
-        <label style={{ marginTop: 16 }}>Usuarios demo</label>
-        <select value={correo} onChange={(e) => setCorreo(e.target.value)}>
-          {DEMOS.map(([c, n]) => <option key={c} value={c}>{n} · {c}</option>)}
-        </select>
-      </form>
+    <div className="ingreso">
+      <section className="ingreso-marca">
+        <Marca />
+        <div className="ingreso-tesis">
+          <h1>Cada incapacidad, del reporte al pago conciliado.</h1>
+          <p>Plazos de transcripción por entidad, cobro a EPS y ARL, y el conteo legal de días acumulados en un solo expediente.</p>
+        </div>
+        <div className="ingreso-regla" aria-hidden="true">
+          <div className="pista">
+            {HITOS.map((h) => <span key={h.dia} className={`h ${h.critico ? 'critico' : ''}`} style={{ left: `${h.dia / 2}%` }} />)}
+          </div>
+          <div className="etiquetas">
+            {HITOS.map((h) => (
+              <span key={h.dia} style={{ left: `${h.dia / 2}%` }}>Día {h.dia}</span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="ingreso-form">
+        <form onSubmit={entrar}>
+          <div>
+            <h2>Ingresar</h2>
+          </div>
+          <p className="sub">Use su correo corporativo.</p>
+          <div className="campo">
+            <label htmlFor="correo">Correo</label>
+            <input id="correo" type="email" autoComplete="username" value={correo} onChange={(e) => setCorreo(e.target.value)} required />
+          </div>
+          <div className="campo">
+            <label htmlFor="clave">Contraseña</label>
+            <input id="clave" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <span className="ayuda">En modo demo se deja vacía.</span>
+          </div>
+          {error && <Aviso msj={{ t: 'error', m: error }} />}
+          <button type="submit" className="grande" disabled={enviando}>{enviando ? 'Ingresando…' : 'Ingresar'}</button>
+
+          <div className="separador">Usuarios de demostración</div>
+          <div className="demo-roles">
+            {DEMOS.map(([c, n]) => (
+              <button key={c} type="button" aria-pressed={correo === c} onClick={() => setCorreo(c)} title={c}>{n}</button>
+            ))}
+          </div>
+        </form>
+      </section>
     </div>
   );
 }
