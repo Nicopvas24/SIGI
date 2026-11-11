@@ -1,0 +1,20 @@
+{
+  "name": "sigi",
+  "version": "1.0.0",
+  "description": "SIGI - Sistema Integral de Gestión de Incapacidades (backend MVC: Node + Express + Supabase)",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test \"tests/unit/*.test.js\""
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0",
+    "@supabase/supabase-js": "^2.49.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "multer": "^1.4.5-lts.1"
+  }
+}

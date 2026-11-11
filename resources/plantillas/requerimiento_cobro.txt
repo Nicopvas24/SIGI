@@ -1,0 +1,20 @@
+REQUERIMIENTO DE PAGO Nº {{numero}}
+Fecha: {{fecha}}
+
+Señores {{entidad}}
+
+Asunto: Cobro persuasivo de prestaciones económicas - Caso {{numero_caso}}
+
+Fundamentos de hecho: la incapacidad del colaborador {{colaborador}} fue debidamente
+transcrita, radicada y aceptada por su entidad, sin que a la fecha se haya efectuado
+el pago de la prestación económica por valor de ${{valor}}.
+
+Fundamentos de derecho: artículos 206 de la Ley 100 de 1993, Decreto 780 de 2016
+(arts. 2.2.3.1 y ss.) y Ley 1822 de 2017, que establecen el reconocimiento y pago
+de incapacidades y licencias a cargo de la EPS/ARL.
+
+Solicitamos efectuar el pago dentro de los términos legales. De no obtener respuesta,
+la empresa dará traslado a cartera y al área jurídica (procedimiento 5.4.2).
+
+Atentamente,
+Administración de Personal

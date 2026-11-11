@@ -1,0 +1,8 @@
+node_modules/
+.env
+storage/logs/*.log
+storage/documentos/*
+!storage/documentos/.gitkeep
+app/views/dist/
+public/index.html
+public/js/

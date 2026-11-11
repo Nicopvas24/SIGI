@@ -1,0 +1,16 @@
+DERECHO DE PETICIÓN (art. 23 C.P. y Ley 1755 de 2015)
+Fecha: {{fecha}}
+
+Señores {{entidad}}
+
+Ref.: Reconocimiento económico de la prestación - Caso {{numero_caso}}
+
+En ejercicio del derecho de petición solicito el reconocimiento y pago de la
+incapacidad del colaborador {{colaborador}}, negada bajo la causal "{{causal}}",
+la cual no resulta aplicable por las razones de hecho y de derecho que se exponen
+en el expediente adjunto.
+
+Término legal de respuesta: quince (15) días hábiles.
+
+Atentamente,
+Área Jurídica
