@@ -1,4 +1,4 @@
-// Vista Cobro jurídico (CU-20 a CU-23)
+// Vista Cobro jurídico
 import { useEffect, useState } from 'react';
 import { Building2, Gavel } from 'lucide-react';
 import { api, sesion } from '../api.js';
@@ -21,11 +21,16 @@ export default function Juridico() {
   };
 
   const decidir = accion(async (c, decision) => {
-    if (decision === 'DAR_DE_BAJA' && !(await dlg.confirmar(`Dar de baja ${c.numero_caso}`,
-      'El saldo se dará por no recuperable y se notificará a Contabilidad. Esta decisión cierra el cobro.',
-      { textoAceptar: 'Dar de baja', peligro: true }))) return;
-    const r = await api(`/incapacidades/${c.id}/decision-juridica`, { method: 'POST', body: { decision } });
-    setMsj({ t: 'ok', m: r.mensaje || `Caso ${c.numero_caso} dado de baja; Contabilidad notificada.` });
+    let motivo = null;
+    if (decision === 'DAR_DE_BAJA') {
+      motivo = await dlg.pedirTexto(`Dar de baja ${c.numero_caso}`, 'Motivo de la baja', '', {
+        descripcion: 'El saldo se dará por no recuperable y se notificará a Contabilidad. Esta decisión cierra el cobro.',
+        campo: { tipo: 'textarea' }, textoAceptar: 'Dar de baja', peligro: true,
+      });
+      if (!motivo) return;
+    }
+    const r = await api(`/incapacidades/${c.id}/decision-juridica`, { method: 'POST', body: { decision, motivo } });
+    setMsj({ t: 'ok', m: r.mensaje });
   });
 
   const peticion = accion(async (c) => {
@@ -40,7 +45,7 @@ export default function Juridico() {
     });
     if (!r0) return;
     const r = await api(`/incapacidades/${c.id}/derecho-peticion`, { method: 'POST', body: { radicado: r0.radicado, causal_negacion: r0.causal } });
-    setMsj({ t: 'ok', m: `Derecho de petición radicado. El término vence el ${fecha(r.vencimiento_termino)}.` });
+    setMsj({ t: 'ok', m: `Derecho de petición radicado. La entidad debe responder a más tardar el ${fecha(r.proceso?.vencimiento_termino)}.` });
   });
 
   const tutela = accion(async (c) => {
@@ -60,15 +65,14 @@ export default function Juridico() {
 
   const resultado = accion(async (p, res) => {
     const r = await api(`/procesos/${p.id}/resultado`, { method: 'POST', body: { resultado: res } });
-    setMsj({ t: 'info', m: r.sugerencia });
+    setMsj({ t: 'info', m: r.mensaje });
   });
 
   return (
     <div>
       <Encabezado
         titulo="Cobro jurídico"
-        descripcion="Expedientes trasladados por incumplimiento de pago: decisión, derecho de petición y tutela."
-        refs={['CU-20', 'CU-23']}
+        descripcion="Expedientes trasladados por incumplimiento de pago o rechazo improcedente: decisión, derecho de petición y tutela. Si el resultado es favorable, el pago se registra desde Cobro."
       />
       <Aviso msj={msj} onCerrar={() => setMsj(null)} />
 

@@ -1,144 +1,100 @@
 // JuridicoController - Módulo "Cobro jurídico" (CU-20 a CU-23)
-import {
-  repoProcesosJuridicos, incapacidadCompleta, registrarBitacora, listarIncapacidades,
-} from '../repositories/index.js';
+import { repoProcesosJuridicos, listarIncapacidades, registrarBitacora } from '../repositories/index.js';
 import { ReglasIncapacidadService } from '../services/ReglasIncapacidadService.js';
 import { NotificacionService } from '../services/NotificacionService.js';
-import { cambiarEstado, asyncHandler } from './_helpers.js';
+import { cambiarEstado, asyncHandler, casoOError, errorHttp } from './_helpers.js';
+import { registrarGestion } from './TranscripcionController.js';
 import { config } from '../../config/config.js';
 
+const hoy = () => new Date().toISOString().slice(0, 10);
+
 export const JuridicoController = {
-  // GET /api/juridico/casos - expedientes en cobro jurídico
+  // GET /api/juridico/casos - expedientes en cobro jurídico y dados de baja
   casos: asyncHandler(async (_req, res) => {
     res.json(await listarIncapacidades({ estado: ['EN_COBRO_JURIDICO', 'DADA_DE_BAJA'] }));
   }),
 
   /**
-   * CU-20 · Trasladar a cobro jurídico: arma el expediente (historial completo)
-   * y notifica al Área Jurídica. body: { causal }
+   * CU-20 · Trasladar a cobro jurídico: por incumplimiento de pago tras el cobro
+   * persuasivo, o por una causal de rechazo improcedente. body: { causal }
    */
   trasladar: asyncHandler(async (req, res) => {
-    const caso = await incapacidadCompleta(req.params.id);
-    if (!caso) return res.status(404).json({ error: 'Caso no encontrado' });
-
-    const actualizada = await cambiarEstado(caso.id, 'EN_COBRO_JURIDICO', req.usuario, {
-      causal: req.body.causal || 'Incumplimiento de pago',
-    });
-    await NotificacionService.notificarRol(
-      'JURIDICA',
-      `Expediente ${caso.numero_caso} trasladado a cobro jurídico`,
-      `Causal: ${req.body.causal || 'incumplimiento de pago'}. Revise el expediente y decida: recuperar o dar de baja.`
-    );
-    // El expediente es el caso completo (soportes, radicados, requerimientos, evidencias, saldo)
-    res.json({
-      caso: actualizada,
-      expediente: {
-        numero_caso: caso.numero_caso,
-        colaborador: caso.colaborador?.usuario?.nombre,
-        entidad: caso.entidad?.nombre,
-        saldo: Number(caso.valor_solicitado || 0) - Number(caso.valor_pagado || 0),
-        documentos: caso.documentos,
-        gestiones: caso.gestiones,
-      },
-    });
+    const caso = await casoOError(req.params.id, ['EN_COBRO_PERSUASIVO', 'RECHAZADA'], 'el traslado a jurídica');
+    const causal = req.body.causal?.trim();
+    if (!causal) throw errorHttp('Escriba la causal del traslado.');
+    if (caso.estado === 'EN_COBRO_PERSUASIVO') {
+      const requerimientos = caso.gestiones.filter((g) => g.tipo === 'REQUERIMIENTO').length;
+      if (requerimientos < 2) throw errorHttp('Antes del traslado deben enviarse al menos dos requerimientos de cobro persuasivo.', 422);
+    }
+    await registrarGestion({ caso, tipo: 'SEGUIMIENTO', usuario: req.usuario, descripcion: `Traslado a jurídica: ${causal}` });
+    await cambiarEstado(caso.id, 'EN_COBRO_JURIDICO', req.usuario, { causal });
+    await NotificacionService.notificarRol('JURIDICA', `Expediente ${caso.numero_caso} en cobro jurídico`,
+      `${caso.colaborador?.usuario?.nombre} · ${caso.entidad?.nombre}. Causal: ${causal}. Revise el expediente y decida si se recupera o se da de baja.`);
+    res.json({ mensaje: `Expediente ${caso.numero_caso} trasladado al área jurídica.` });
   }),
 
-  /**
-   * CU-20 paso 6 · Decisión de jurídica: RECUPERAR o DAR_DE_BAJA.
-   */
+  /** Decisión de jurídica sobre el expediente: RECUPERAR o DAR_DE_BAJA. */
   decidir: asyncHandler(async (req, res) => {
-    const caso = await incapacidadCompleta(req.params.id);
-    if (!caso) return res.status(404).json({ error: 'Caso no encontrado' });
-    const decision = req.body.decision;
-
-    if (decision === 'DAR_DE_BAJA') {
-      const actualizada = await cambiarEstado(caso.id, 'DADA_DE_BAJA', req.usuario);
-      await NotificacionService.notificarRol('CONTABILIDAD', `Baja ${caso.numero_caso}`, 'Jurídica decidió dar de baja la incapacidad.');
-      return res.json({ caso: actualizada });
+    const caso = await casoOError(req.params.id, ['EN_COBRO_JURIDICO'], 'esta decisión');
+    if (req.body.decision === 'DAR_DE_BAJA') {
+      await cambiarEstado(caso.id, 'DADA_DE_BAJA', req.usuario, { motivo: req.body.motivo || null });
+      await NotificacionService.notificarRol('CONTABILIDAD', `Baja de cartera · ${caso.numero_caso}`,
+        `Jurídica dio de baja el saldo de ${caso.entidad?.nombre}.${req.body.motivo ? ` Motivo: ${req.body.motivo}` : ''}`);
+      return res.json({ mensaje: `Caso ${caso.numero_caso} dado de baja. Contabilidad fue notificada.` });
     }
-    await registrarBitacora(req.usuario.id, 'CU-20:DECISION_RECUPERAR', { numero_caso: caso.numero_caso });
-    res.json({ mensaje: 'Decisión de recuperar registrada. Radique el derecho de petición (CU-22).' });
+    if (req.body.decision !== 'RECUPERAR') throw errorHttp('La decisión debe ser recuperar o dar de baja.');
+    await registrarBitacora(req.usuario.id, 'JURIDICA:RECUPERAR', { numero_caso: caso.numero_caso });
+    res.json({ mensaje: 'Decisión de recuperar registrada. El primer paso es radicar el derecho de petición.' });
   }),
 
-  /**
-   * CU-22 · Radicar derecho de petición (término legal: 15 días hábiles).
-   * body: { radicado, fecha_radicacion, causal_negacion }
-   */
+  /** CU-22 · Radicar derecho de petición (término de respuesta: 15 días hábiles). */
   derechoPeticion: asyncHandler(async (req, res) => {
-    const caso = await incapacidadCompleta(req.params.id);
-    if (!caso) return res.status(404).json({ error: 'Caso no encontrado' });
-    if (caso.estado !== 'EN_COBRO_JURIDICO') {
-      return res.status(422).json({ error: 'El caso debe estar EN_COBRO_JURIDICO (CU-21 precondición)' });
+    const caso = await casoOError(req.params.id, ['EN_COBRO_JURIDICO'], 'un derecho de petición');
+    if (!req.body.radicado?.trim()) throw errorHttp('Escriba el número de radicado.');
+    if ((caso.procesos || []).some((p) => p.tipo === 'DERECHO_PETICION' && !p.resultado)) {
+      throw errorHttp('Ya hay un derecho de petición en curso. Registre su respuesta antes de radicar otro.', 409);
     }
-    const fecha = req.body.fecha_radicacion || new Date().toISOString().slice(0, 10);
-    const vencimiento = ReglasIncapacidadService.sumarDiasHabiles(
-      new Date(fecha), config.plazos.respuestaDerechoPeticionDiasHabiles
-    );
+    const fecha = req.body.fecha_radicacion || hoy();
+    const vencimiento = ReglasIncapacidadService.sumarDiasHabiles(new Date(fecha), config.plazos.respuestaDerechoPeticionDiasHabiles)
+      .toISOString().slice(0, 10);
     const proceso = await repoProcesosJuridicos.crear({
-      incapacidad_id: caso.id,
-      tipo: 'DERECHO_PETICION',
-      abogado_id: req.usuario.id,
-      causal: req.body.causal_negacion || null,
-      radicado: req.body.radicado || null,
-      fecha_radicacion: fecha,
-      vencimiento_termino: vencimiento.toISOString().slice(0, 10),
-      estado: 'RADICADO',
+      incapacidad_id: caso.id, tipo: 'DERECHO_PETICION', abogado_id: req.usuario.id,
+      causal: req.body.causal_negacion?.trim() || null, radicado: req.body.radicado.trim(),
+      fecha_radicacion: fecha, vencimiento_termino: vencimiento, estado: 'RADICADO',
     });
-    res.status(201).json({ proceso, vencimiento_termino: proceso.vencimiento_termino });
+    res.status(201).json({ proceso, mensaje: `Derecho de petición radicado. La entidad debe responder a más tardar el ${vencimiento}.` });
   }),
 
-  /**
-   * CU-23 · Radicar acción de tutela (última opción).
-   * body: { radicado, juzgado, fecha_radicacion }
-   */
+  /** CU-23 · Radicar acción de tutela: procede si la petición fue negada o no se respondió a tiempo. */
   accionTutela: asyncHandler(async (req, res) => {
-    const caso = await incapacidadCompleta(req.params.id);
-    if (!caso) return res.status(404).json({ error: 'Caso no encontrado' });
-
-    // Precondición CU-23: derecho de petición negado o sin respuesta
-    const peticiones = (caso.procesos || []).filter((p) => p.tipo === 'DERECHO_PETICION');
-    const habilitada = peticiones.some(
-      (p) => p.resultado === 'DESFAVORABLE' || p.resultado === 'SIN_RESPUESTA' ||
-             (p.vencimiento_termino && new Date(p.vencimiento_termino) < new Date() && !p.resultado)
-    );
-    if (!habilitada) {
-      return res.status(422).json({
-        error: 'La tutela solo procede si el derecho de petición fue negado o no tuvo respuesta al vencer el término (CU-23 precondición).',
-      });
+    const caso = await casoOError(req.params.id, ['EN_COBRO_JURIDICO'], 'una acción de tutela');
+    if (!req.body.radicado?.trim() || !req.body.juzgado?.trim()) throw errorHttp('Escriba el número de proceso y el juzgado.');
+    const procede = (caso.procesos || []).some((p) => p.tipo === 'DERECHO_PETICION' && (
+      p.resultado === 'DESFAVORABLE' || p.resultado === 'SIN_RESPUESTA' ||
+      (!p.resultado && p.vencimiento_termino && p.vencimiento_termino < hoy())));
+    if (!procede) {
+      throw errorHttp('La tutela solo procede cuando el derecho de petición fue negado o no se respondió dentro del término.', 422);
     }
-
     const proceso = await repoProcesosJuridicos.crear({
-      incapacidad_id: caso.id,
-      tipo: 'ACCION_TUTELA',
-      abogado_id: req.usuario.id,
-      radicado: req.body.radicado || null,
-      juzgado: req.body.juzgado || null,
-      fecha_radicacion: req.body.fecha_radicacion || new Date().toISOString().slice(0, 10),
-      estado: 'RADICADO',
+      incapacidad_id: caso.id, tipo: 'ACCION_TUTELA', abogado_id: req.usuario.id,
+      radicado: req.body.radicado.trim(), juzgado: req.body.juzgado.trim(),
+      fecha_radicacion: req.body.fecha_radicacion || hoy(), estado: 'RADICADO',
     });
-    res.status(201).json(proceso);
+    res.status(201).json({ proceso, mensaje: 'Acción de tutela radicada.' });
   }),
 
-  /**
-   * CU-21 paso 5 · Registrar respuesta/fallo de un proceso jurídico.
-   * body: { resultado: FAVORABLE|DESFAVORABLE|SIN_RESPUESTA }
-   */
+  /** Registrar la respuesta o el fallo de un proceso: FAVORABLE | DESFAVORABLE | SIN_RESPUESTA. */
   registrarResultado: asyncHandler(async (req, res) => {
     const proceso = await repoProcesosJuridicos.porId(req.params.procesoId);
-    if (!proceso) return res.status(404).json({ error: 'Proceso no encontrado' });
-    const actualizado = await repoProcesosJuridicos.actualizar(proceso.id, {
-      resultado: req.body.resultado, estado: 'RESUELTO',
-    });
-    await registrarBitacora(req.usuario.id, 'CU-21:RESULTADO', {
-      proceso_id: proceso.id, resultado: req.body.resultado,
-    });
-    res.json({
-      proceso: actualizado,
-      sugerencia: req.body.resultado === 'FAVORABLE'
-        ? 'Respuesta favorable: el caso vuelve a seguimiento de pago (CU-18/CU-22 7a).'
-        : proceso.tipo === 'DERECHO_PETICION'
-          ? 'Negado o sin respuesta: se habilita la acción de tutela (CU-23).'
-          : 'Fallo desfavorable: jurídica decide si impugna o da de baja (CU-23 7a).',
-    });
+    if (!proceso) throw errorHttp('Proceso no encontrado', 404);
+    if (!['FAVORABLE', 'DESFAVORABLE', 'SIN_RESPUESTA'].includes(req.body.resultado)) throw errorHttp('Resultado no válido.');
+    const actualizado = await repoProcesosJuridicos.actualizar(proceso.id, { resultado: req.body.resultado, estado: 'RESUELTO' });
+    await registrarBitacora(req.usuario.id, 'JURIDICA:RESULTADO', { proceso_id: proceso.id, resultado: req.body.resultado });
+    const siguiente = req.body.resultado === 'FAVORABLE'
+      ? 'Respuesta favorable: registre el pago desde Cobro cuando la entidad consigne.'
+      : proceso.tipo === 'DERECHO_PETICION'
+        ? 'Sin respuesta favorable: ya puede radicar la acción de tutela.'
+        : 'Fallo desfavorable: decida si se impugna o se da de baja el caso.';
+    res.json({ proceso: actualizado, mensaje: siguiente });
   }),
 };

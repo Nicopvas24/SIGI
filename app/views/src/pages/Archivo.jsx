@@ -1,4 +1,4 @@
-// Vista Archivo de incapacidades pagadas (CU-29, CU-30)
+// Vista Archivo de incapacidades pagadas
 import { useEffect, useState } from 'react';
 import { Archive, Check } from 'lucide-react';
 import { api } from '../api.js';
@@ -38,7 +38,8 @@ export default function Archivo() {
       const r = await api(`/incapacidades/${c.id}/archivar`, {
         method: 'POST', body: { confirmacion_destruccion_epicrisis: true, ubicacion_fisica: r0.ubicacion },
       });
-      setMsj({ t: 'ok', m: `Archivada. Planilla: ${r.planilla_transferencia.documentos_transferidos} transferido(s), ${r.planilla_transferencia.documentos_destruidos} destruido(s).` });
+      setMsj({ t: 'ok', m: r.mensaje });
+      setFisicos((s) => { const n = new Set(s); n.delete(c.id); return n; });
       cargar();
     } catch (e) { setMsj({ t: 'error', m: e.message }); }
   }
@@ -51,8 +52,7 @@ export default function Archivo() {
     <div>
       <Encabezado
         titulo="Archivo de pagadas"
-        descripcion="Marque los expedientes físicos encontrados y archive los que tienen soporte de liquidación."
-        refs={['CU-29', 'CU-30']}
+        descripcion="Marque los expedientes físicos encontrados, crúcelos con las pagadas y transfiera a Gestión Documental los que tienen soporte de liquidación."
       />
       <Aviso msj={msj} onCerrar={() => setMsj(null)} />
 
@@ -64,7 +64,9 @@ export default function Archivo() {
         pie={verificacion && (
           <Aviso msj={{
             t: verificacion.alerta ? 'error' : 'ok',
-            m: <>Aptas para envío: {verificacion.aptas_para_envio.join(', ') || 'ninguna'}. Pagadas sin físico: {verificacion.pagadas_sin_fisico.join(', ') || 'ninguna'}.{verificacion.alerta && <> {verificacion.alerta}</>}</>,
+            m: <>Aptas para envío: {verificacion.aptas_para_envio.join(', ') || 'ninguna'}. Pagadas sin físico: {verificacion.pagadas_sin_fisico.join(', ') || 'ninguna'}.
+              {verificacion.sin_soporte_liquidacion.length > 0 && <> Sin soporte de liquidación: {verificacion.sin_soporte_liquidacion.join(', ')}.</>}
+              {verificacion.alerta && <> {verificacion.alerta}</>}</>,
           }} onCerrar={() => setVerificacion(null)} />
         )}
       >

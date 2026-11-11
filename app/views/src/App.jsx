@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { sesion } from './api.js';
-import Layout from './layouts/Layout.jsx';
+import Layout, { inicioDeRol } from './layouts/Layout.jsx';
 import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Recepcion from './pages/Recepcion.jsx';
@@ -10,9 +10,16 @@ import Cobro from './pages/Cobro.jsx';
 import Juridico from './pages/Juridico.jsx';
 import Conciliacion from './pages/Conciliacion.jsx';
 import Archivo from './pages/Archivo.jsx';
+import Colaboradores from './pages/Colaboradores.jsx';
+import Notificaciones from './pages/Notificaciones.jsx';
 
 function Protegida({ children }) {
   return sesion() ? children : <Navigate to="/login" replace />;
+}
+
+// Cada rol entra a su módulo principal (el monitoreo es solo del auxiliar)
+function Inicio() {
+  return <Navigate to={inicioDeRol(sesion()?.usuario?.rol)} replace />;
 }
 
 export default function App() {
@@ -20,7 +27,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<Protegida><Layout /></Protegida>}>
-        <Route index element={<Dashboard />} />
+        <Route index element={<Inicio />} />
+        <Route path="monitoreo" element={<Dashboard />} />
         <Route path="recepcion" element={<Recepcion />} />
         <Route path="verificacion" element={<Verificacion />} />
         <Route path="transcripcion" element={<Transcripcion />} />
@@ -28,6 +36,8 @@ export default function App() {
         <Route path="juridico" element={<Juridico />} />
         <Route path="conciliacion" element={<Conciliacion />} />
         <Route path="archivo" element={<Archivo />} />
+        <Route path="colaboradores" element={<Colaboradores />} />
+        <Route path="notificaciones" element={<Notificaciones />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -61,22 +61,42 @@ export function Estado({ valor }) {
 }
 
 // ---------- Estructura ----------
-export function Encabezado({ titulo, descripcion, refs = [], children }) {
+export function Encabezado({ titulo, descripcion, children }) {
   return (
     <header className="encabezado">
       <div>
         <h1>{titulo}</h1>
         {descripcion && <p>{descripcion}</p>}
       </div>
-      {(refs.length > 0 || children) && (
-        <div className="encabezado-extra">
-          {refs.map((r) => <span key={r} className="ref" title="Caso de uso de la documentación">{r}</span>)}
-          {children}
-        </div>
-      )}
+      {children && <div className="encabezado-extra">{children}</div>}
     </header>
   );
 }
+
+export const DOCUMENTOS = {
+  CERTIFICADO: 'Certificado de incapacidad',
+  EPICRISIS: 'Epicrisis o soporte médico',
+  FURIPS: 'FURIPS',
+  NACIDO_VIVO: 'Certificado de nacido vivo',
+  REGISTRO_CIVIL: 'Registro civil',
+  DOC_IDENTIDAD: 'Documento de identidad',
+};
+export const documento = (t) => DOCUMENTOS[t] || String(t || '').replaceAll('_', ' ').toLowerCase();
+
+// Documentos exigidos por tipo de novedad (procedimiento 5.1.2)
+export function documentosRequeridos(tipoNovedad, dias = 0) {
+  const base = {
+    ENFERMEDAD_GENERAL: ['CERTIFICADO', 'EPICRISIS'],
+    ACCIDENTE_TRANSITO: ['CERTIFICADO', 'EPICRISIS', 'FURIPS'],
+    ACCIDENTE_LABORAL: ['CERTIFICADO', 'EPICRISIS'],
+    LICENCIA_MATERNIDAD: ['CERTIFICADO', 'EPICRISIS', 'NACIDO_VIVO', 'REGISTRO_CIVIL', 'DOC_IDENTIDAD'],
+    LICENCIA_PATERNIDAD: ['EPICRISIS', 'NACIDO_VIVO', 'REGISTRO_CIVIL', 'DOC_IDENTIDAD'],
+  }[tipoNovedad] || ['CERTIFICADO'];
+  return tipoNovedad === 'ENFERMEDAD_GENERAL' && Number(dias) <= 2 ? base.filter((d) => d !== 'EPICRISIS') : base;
+}
+
+export const ARCHIVOS_ACEPTADOS = 'application/pdf,image/jpeg,image/png,image/webp';
+export const hoy = () => new Date().toISOString().slice(0, 10);
 
 export function Panel({ titulo, sub, extra, children, pie, cuerpo = true }) {
   return (
@@ -206,7 +226,7 @@ export function PanelIA({ titulo, descripcion, accion, cargando, onEjecutar, chi
             </button>}
       </div>
       <p className="ia-nota">
-        {pendiente ? 'Esta función se activará cuando se configure el servicio de inteligencia artificial.' : descripcion}
+        {pendiente ? 'Se activará cuando el administrador configure la clave de Google Gemini (GEMINI_API_KEY).' : descripcion}
       </p>
       {children && !pendiente && <div className="ia-cuerpo">{children}</div>}
     </div>
@@ -241,7 +261,13 @@ export function DialogoProvider({ children }) {
     if (!cfg.campos?.length) return cerrar(true);
     const fd = new FormData(e.currentTarget);
     const valores = {};
-    for (const c of cfg.campos) valores[c.nombre] = c.tipo === 'multi' ? fd.getAll(c.nombre) : String(fd.get(c.nombre) ?? '').trim();
+    for (const c of cfg.campos) {
+      if (c.tipo === 'multi') valores[c.nombre] = fd.getAll(c.nombre);
+      else if (c.tipo === 'file') {
+        const f = fd.get(c.nombre);
+        valores[c.nombre] = f && f.size ? f : null;
+      } else valores[c.nombre] = String(fd.get(c.nombre) ?? '').trim();
+    }
     cerrar(valores);
   }
 
@@ -303,13 +329,26 @@ function CampoDialogo({ c, autoFocus }) {
       </fieldset>
     );
   }
+  let control;
+  if (c.tipo === 'textarea') {
+    control = <textarea id={id} name={c.nombre} rows={3} defaultValue={c.valor} required={c.requerido} autoFocus={autoFocus} />;
+  } else if (c.tipo === 'select') {
+    control = (
+      <select id={id} name={c.nombre} defaultValue={c.valor ?? ''} required={c.requerido} autoFocus={autoFocus}>
+        {c.vacio !== false && <option value="">{c.vacio || 'Seleccione…'}</option>}
+        {c.opciones.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+      </select>
+    );
+  } else if (c.tipo === 'file') {
+    control = <input id={id} name={c.nombre} type="file" accept={c.accept || ARCHIVOS_ACEPTADOS} required={c.requerido} autoFocus={autoFocus} />;
+  } else {
+    control = <input id={id} name={c.nombre} type={c.tipo || 'text'} defaultValue={c.valor} required={c.requerido}
+      autoFocus={autoFocus} min={c.min} max={c.max} step={c.step} />;
+  }
   return (
     <div className="campo">
-      <label htmlFor={id}>{c.etiqueta}</label>
-      {c.tipo === 'textarea'
-        ? <textarea id={id} name={c.nombre} rows={3} defaultValue={c.valor} required={c.requerido} autoFocus={autoFocus} />
-        : <input id={id} name={c.nombre} type={c.tipo || 'text'} defaultValue={c.valor} required={c.requerido}
-            autoFocus={autoFocus} min={c.min} step={c.step} />}
+      <label htmlFor={id}>{c.etiqueta}{c.requerido ? '' : <span className="texto-tenue"> (opcional)</span>}</label>
+      {control}
       {c.ayuda && <span className="ayuda">{c.ayuda}</span>}
     </div>
   );

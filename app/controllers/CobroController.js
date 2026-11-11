@@ -1,197 +1,164 @@
 // CobroController - Módulo "Cobro" (CU-17, CU-18, CU-19, CU-31, CU-32)
-import {
-  repoIncapacidades, repoGestiones, repoEvidencias, repoPagos,
-  listarIncapacidades, incapacidadCompleta, registrarBitacora,
-} from '../repositories/index.js';
-import { cambiarEstado, asyncHandler, notificarAuxiliares } from './_helpers.js';
-import { config } from '../../config/config.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { repoIncapacidades, repoPagos, listarIncapacidades } from '../repositories/index.js';
+import { DocumentoService } from '../services/DocumentoService.js';
+import { cambiarEstado, asyncHandler, notificarAuxiliares, casoOError, errorHttp, diasAcumulados } from './_helpers.js';
+import { registrarGestion } from './TranscripcionController.js';
+import { config } from '../../config/config.js';
 
 const aqui = path.dirname(fileURLToPath(import.meta.url));
+const ESTADOS_COBRO = ['RADICADA', 'ACEPTADA', 'COBRADA', 'EN_COBRO_PERSUASIVO', 'EN_COBRO_JURIDICO', 'PAGO_NOTIFICADO'];
+const PUEDE_PAGAR = ['COBRADA', 'EN_COBRO_PERSUASIVO', 'EN_COBRO_JURIDICO'];
+const hoy = () => new Date().toISOString().slice(0, 10);
+const diasDesde = (f) => (f ? Math.floor((Date.now() - new Date(f)) / 86400000) : 0);
 
 export const CobroController = {
-  // GET /api/cobro/tablero - casos por entidad con estado, días y saldos (CU-18 paso 2)
+  // GET /api/cobro/tablero - cartera por entidad con la siguiente gestión de cada caso
   tablero: asyncHandler(async (_req, res) => {
-    const casos = await listarIncapacidades({
-      estado: ['TRANSCRITA', 'RADICADA', 'ACEPTADA', 'RECHAZADA', 'COBRADA', 'EN_COBRO_PERSUASIVO', 'EN_COBRO_JURIDICO', 'PAGO_NOTIFICADO'],
-    });
+    const casos = await listarIncapacidades({ estado: ESTADOS_COBRO });
     const porEntidad = {};
     for (const c of casos) {
       const nombre = c.entidad?.nombre || 'Sin entidad';
       porEntidad[nombre] ||= { casos: [], saldo_adeudado: 0 };
-      const saldo = Number(c.valor_solicitado || 0) - Number(c.valor_pagado || 0);
+      const gestiones = c.gestiones || [];
+      const solicitud = gestiones.filter((g) => g.tipo === 'SOLICITUD_PAGO').sort((a, b) => a.fecha.localeCompare(b.fecha))[0];
+      const saldo = Math.max(Number(c.valor_solicitado || 0) - Number(c.valor_pagado || 0), 0);
       porEntidad[nombre].casos.push({
         ...c,
-        dias_transcurridos: Math.floor((Date.now() - new Date(c.created_at)) / 86400000),
         saldo,
-        cobro_vencido: c.fecha_promesa_pago ? new Date(c.fecha_promesa_pago) < new Date() && c.estado !== 'PAGADA' : false,
+        dias_cobro: solicitud ? diasDesde(solicitud.fecha) : null,
+        requerimientos: gestiones.filter((g) => g.tipo === 'REQUERIMIENTO').length,
+        ultimo_seguimiento: gestiones.filter((g) => g.tipo === 'SEGUIMIENTO').map((g) => g.fecha).sort().pop() || null,
+        cobro_vencido: Boolean(c.fecha_promesa_pago && c.fecha_promesa_pago < hoy() && PUEDE_PAGAR.includes(c.estado)),
       });
-      if (!['PAGADA', 'ARCHIVADA', 'DADA_DE_BAJA'].includes(c.estado)) {
-        porEntidad[nombre].saldo_adeudado += saldo;
-      }
+      if (c.estado !== 'RADICADA') porEntidad[nombre].saldo_adeudado += saldo;
     }
     res.json(porEntidad);
   }),
 
   /**
-   * CU-31 · Notificar aceptación y tiempo de pago (interfaz con la EPS/ARL).
-   * body: { fecha_promesa_pago } - también sirve para registrar el rechazo
-   * con body { rechazo: true, causal }.
+   * CU-31 · La entidad notifica la aceptación y la fecha promesa de pago,
+   * o el rechazo con su causal. body: { fecha_promesa_pago } | { rechazo: true, causal }
    */
   notificarAceptacion: asyncHandler(async (req, res) => {
-    const caso = await repoIncapacidades.porId(req.params.id);
-    if (!caso) return res.status(404).json({ error: 'Caso no encontrado' });
-
+    const caso = await casoOError(req.params.id, ['RADICADA'], 'el registro de la respuesta de la entidad');
     if (req.body.rechazo) {
-      const actualizada = await cambiarEstado(caso.id, 'RECHAZADA', req.usuario, { causal: req.body.causal });
-      return res.json({ caso: actualizada, mensaje: 'Rechazo registrado con causal (CU-31 1a).' });
+      if (!req.body.causal?.trim()) throw errorHttp('Escriba la causal del rechazo.');
+      await registrarGestion({ caso, tipo: 'SEGUIMIENTO', usuario: req.usuario, descripcion: `Rechazo: ${req.body.causal.trim()}` });
+      await cambiarEstado(caso.id, 'RECHAZADA', req.usuario, { causal: req.body.causal.trim() });
+      return res.json({ mensaje: 'Rechazo registrado. El caso pasa a Transcripción y radicación para subsanar la causal.' });
     }
-
-    await repoIncapacidades.actualizar(caso.id, { fecha_promesa_pago: req.body.fecha_promesa_pago || null });
-    const actualizada = await cambiarEstado(caso.id, 'ACEPTADA', req.usuario, {
-      fecha_promesa_pago: req.body.fecha_promesa_pago,
-    });
-    await notificarAuxiliares(`Aceptada ${caso.numero_caso}`, 'La entidad notificó la aceptación. Ya puede solicitar el pago (CU-17).');
-    res.json({ caso: actualizada });
+    const fecha = req.body.fecha_promesa_pago;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha || '')) throw errorHttp('Indique la fecha promesa de pago notificada por la entidad.');
+    await repoIncapacidades.actualizar(caso.id, { fecha_promesa_pago: fecha });
+    await cambiarEstado(caso.id, 'ACEPTADA', req.usuario, { fecha_promesa_pago: fecha });
+    res.json({ mensaje: `Aceptación registrada con promesa de pago el ${fecha}. Ya puede solicitar el pago.` });
   }),
 
   /**
-   * CU-17 · Solicitar pago de prestaciones económicas (semanal, por entidad).
-   * body: { valor_solicitado?, evidencia_url, descripcion }
+   * CU-17 · Solicitud de pago de prestaciones económicas. La constancia de envío es obligatoria.
+   * multipart: valor_solicitado?, descripcion?, evidencia
    */
   solicitarPago: asyncHandler(async (req, res) => {
-    const caso = await incapacidadCompleta(req.params.id);
-    if (!caso) return res.status(404).json({ error: 'Caso no encontrado' });
-    if (!req.body.evidencia_url) {
-      return res.status(422).json({ error: 'Adjunte la constancia de envío (comportamiento CU-15)' });
-    }
-
-    const valor = Number(req.body.valor_solicitado ?? caso.valor_solicitado ?? 0);
-    const gestion = await repoGestiones.crear({
-      incapacidad_id: caso.id,
-      tipo: 'SOLICITUD_PAGO',
-      descripcion: `Valor solicitado: ${valor}. ${req.body.descripcion || ''} ` +
-        (caso.tipo.startsWith('LICENCIA') ? '(formulario específico de licencias, CU-17 3a)' : ''),
-      responsable_id: req.usuario.id,
-    });
-    await repoEvidencias.crear({
-      gestion_id: gestion.id, archivo_url: req.body.evidencia_url,
-      descripcion: 'Constancia de solicitud de pago', usuario_id: req.usuario.id,
+    const caso = await casoOError(req.params.id, ['ACEPTADA'], 'la solicitud de pago');
+    const valor = Number(req.body.valor_solicitado || caso.valor_solicitado || 0);
+    if (valor <= 0) throw errorHttp('El valor a solicitar debe ser mayor que cero. Revise el IBC del formato de seguimiento.');
+    const formulario = caso.tipo.startsWith('LICENCIA') ? 'formulario de licencias' : 'formulario de prestaciones económicas';
+    await registrarGestion({
+      caso, tipo: 'SOLICITUD_PAGO', usuario: req.usuario, archivo: req.file, exigirEvidencia: true,
+      descripcion: `Solicitud de pago por ${valor} (${formulario}). ${req.body.descripcion || ''}`.trim(),
     });
     await repoIncapacidades.actualizar(caso.id, { valor_solicitado: valor });
-
-    const actualizada = await cambiarEstado(caso.id, 'COBRADA', req.usuario, { valor });
-    res.json({ caso: actualizada, gestion });
+    await cambiarEstado(caso.id, 'COBRADA', req.usuario, { valor });
+    const acumulados = await diasAcumulados(caso);
+    res.json({
+      mensaje: `Solicitud de pago registrada. El caso queda en cobro hasta que la entidad pague.` +
+        (acumulados > 180 ? ' Atención: la incapacidad supera 180 días; desde el día 181 el trámite es del colaborador ante el fondo de pensiones.' : ''),
+    });
   }),
 
   /**
-   * CU-18 · Hacer seguimiento al cobro: registra estado consultado,
-   * observación y evidencia; detecta cobro vencido (punto de extensión -> CU-19).
+   * CU-18 · Seguimiento semanal en el canal de la entidad.
+   * multipart: observacion, evidencia?
    */
   seguimiento: asyncHandler(async (req, res) => {
-    const caso = await incapacidadCompleta(req.params.id);
-    if (!caso) return res.status(404).json({ error: 'Caso no encontrado' });
-
-    const gestion = await repoGestiones.crear({
-      incapacidad_id: caso.id,
-      tipo: 'SEGUIMIENTO',
-      descripcion: `Estado consultado: ${req.body.estado_consultado || 'N/D'}. ${req.body.observacion || ''}`.trim(),
-      responsable_id: req.usuario.id,
-    });
-    if (req.body.evidencia_url) {
-      await repoEvidencias.crear({
-        gestion_id: gestion.id, archivo_url: req.body.evidencia_url,
-        descripcion: 'Evidencia de seguimiento', usuario_id: req.usuario.id,
-      });
-    }
-
-    const vencido = caso.fecha_promesa_pago && new Date(caso.fecha_promesa_pago) < new Date();
+    const caso = await casoOError(req.params.id, PUEDE_PAGAR, 'seguimiento de cobro');
+    if (!req.body.observacion?.trim()) throw errorHttp('Escriba lo que se consultó o respondió la entidad.');
+    await registrarGestion({ caso, tipo: 'SEGUIMIENTO', usuario: req.usuario, archivo: req.file,
+      descripcion: `Seguimiento: ${req.body.observacion.trim()}` });
+    const vencido = caso.fecha_promesa_pago && caso.fecha_promesa_pago < hoy();
     res.json({
-      gestion,
       cobro_vencido: Boolean(vencido),
-      sugerencia: vencido ? 'Cobro vencido: puede iniciar el cobro persuasivo (CU-19).' : null,
+      mensaje: vencido
+        ? 'Seguimiento registrado. La fecha promesa de pago ya venció: puede enviar un requerimiento de cobro persuasivo.'
+        : 'Seguimiento registrado.',
     });
   }),
 
   /**
-   * CU-19 · Cobro persuasivo: genera el requerimiento desde la plantilla
-   * (resources/plantillas) y lo registra con evidencia. Dos requerimientos
-   * mínimo; a los 180 días sin pago ofrece el traslado a jurídica (CU-20).
+   * CU-19 · Requerimiento de cobro persuasivo (mínimo dos). Genera el texto desde
+   * la plantilla con fundamentos de hecho y de derecho.
+   * multipart: evidencia?, deterioro_crediticio?
    */
   requerimiento: asyncHandler(async (req, res) => {
-    const caso = await incapacidadCompleta(req.params.id);
-    if (!caso) return res.status(404).json({ error: 'Caso no encontrado' });
+    const caso = await casoOError(req.params.id, ['COBRADA', 'EN_COBRO_PERSUASIVO'], 'requerimientos de cobro');
+    const numero = (caso.gestiones || []).filter((g) => g.tipo === 'REQUERIMIENTO').length + 1;
 
-    if (caso.estado === 'COBRADA') await cambiarEstado(caso.id, 'EN_COBRO_PERSUASIVO', req.usuario);
-
-    const previos = (await repoGestiones.listar({ incapacidad_id: caso.id, tipo: 'REQUERIMIENTO' })).length;
-    const numero = previos + 1;
-
-    // Borrador desde plantilla (resources/)
-    let plantilla = '';
+    let plantilla;
     try {
       plantilla = fs.readFileSync(path.join(aqui, '../../resources/plantillas/requerimiento_cobro.txt'), 'utf8');
-    } catch { plantilla = 'Requerimiento de pago Nº {{numero}} - caso {{numero_caso}} - entidad {{entidad}} - valor {{valor}}'; }
-    const borrador = plantilla
+    } catch {
+      plantilla = 'Requerimiento de pago Nº {{numero}} del caso {{numero_caso}} a {{entidad}} por {{valor}}.';
+    }
+    const texto = plantilla
       .replaceAll('{{numero}}', String(numero))
       .replaceAll('{{numero_caso}}', caso.numero_caso)
       .replaceAll('{{entidad}}', caso.entidad?.nombre || '')
       .replaceAll('{{colaborador}}', caso.colaborador?.usuario?.nombre || '')
-      .replaceAll('{{valor}}', String(caso.valor_solicitado || 0))
-      .replaceAll('{{fecha}}', new Date().toISOString().slice(0, 10));
+      .replaceAll('{{valor}}', Number(caso.valor_solicitado || 0).toLocaleString('es-CO'))
+      .replaceAll('{{fecha}}', hoy());
 
-    const gestion = await repoGestiones.crear({
-      incapacidad_id: caso.id,
-      tipo: 'REQUERIMIENTO',
-      numero_referencia: `REQ-${numero}`,
-      descripcion: borrador,
-      responsable_id: req.usuario.id,
-    });
-    if (req.body.evidencia_url) {
-      await repoEvidencias.crear({
-        gestion_id: gestion.id, archivo_url: req.body.evidencia_url,
-        descripcion: `Requerimiento ${numero} enviado`, usuario_id: req.usuario.id,
-      });
-    }
+    await registrarGestion({ caso, tipo: 'REQUERIMIENTO', usuario: req.usuario, archivo: req.file,
+      numero: `REQ-${numero}`, descripcion: texto });
+    if (caso.estado === 'COBRADA') await cambiarEstado(caso.id, 'EN_COBRO_PERSUASIVO', req.usuario);
 
-    const diasCobro = Math.floor((Date.now() - new Date(caso.created_at)) / 86400000);
-    const ofrecerJuridica = numero >= 2 && (diasCobro >= config.plazos.diasCobroAntesDeJuridica || req.body.deterioro_crediticio);
-    await registrarBitacora(req.usuario.id, 'CU-19:REQUERIMIENTO', { numero_caso: caso.numero_caso, numero });
-
+    const solicitud = (caso.gestiones || []).filter((g) => g.tipo === 'SOLICITUD_PAGO').map((g) => g.fecha).sort()[0];
+    const diasCobro = diasDesde(solicitud || caso.created_at);
+    const ofrecerJuridica = numero >= 2 && (diasCobro >= config.plazos.diasCobroAntesDeJuridica || req.body.deterioro_crediticio === 'true');
     res.json({
-      gestion, requerimiento_numero: numero, dias_cobro: diasCobro,
-      ofrecer_cobro_juridico: Boolean(ofrecerJuridica),
-      sugerencia: ofrecerJuridica ? '180 días sin pago o deterioro crediticio: trasladar a cobro jurídico (CU-20).' : null,
+      requerimiento_numero: numero, dias_cobro: diasCobro, texto, ofrecer_cobro_juridico: ofrecerJuridica,
+      mensaje: `Requerimiento Nº ${numero} registrado (${diasCobro} días de cobro).` +
+        (numero < 2 ? ' El procedimiento exige al menos dos requerimientos antes del traslado a jurídica.' : '') +
+        (ofrecerJuridica ? ' Ya puede trasladar el caso a cobro jurídico.' : ''),
     });
   }),
 
   /**
-   * CU-32 · Realizar pago (interfaz con la EPS/ARL): registra la transferencia
-   * y el soporte de liquidación; deja el caso en PAGO_NOTIFICADO por conciliar.
+   * CU-32 · La entidad paga: registra la transferencia y el soporte de liquidación.
+   * El caso queda en Pago notificado, pendiente de conciliar con Contabilidad.
+   * multipart: valor, fecha_pago, soporte?
    */
   registrarPago: asyncHandler(async (req, res) => {
-    const caso = await incapacidadCompleta(req.params.id);
-    if (!caso) return res.status(404).json({ error: 'Caso no encontrado' });
-    const { valor, fecha_pago, soporte_url } = req.body;
-    if (!valor || !fecha_pago) return res.status(400).json({ error: 'valor y fecha_pago son obligatorios' });
-
+    const caso = await casoOError(req.params.id, PUEDE_PAGAR, 'el registro de un pago');
+    const valor = Number(req.body.valor);
+    if (!(valor > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(req.body.fecha_pago || '')) {
+      throw errorHttp('Indique el valor pagado (mayor que cero) y la fecha del pago.');
+    }
+    const soporte = req.file ? await DocumentoService.guardarEvidencia({ incapacidad: caso, tipoGestion: 'LIQUIDACION', archivo: req.file }) : null;
     const pago = await repoPagos.crear({
-      incapacidad_id: caso.id,
-      entidad_id: caso.entidad_id,
-      valor: Number(valor),
-      fecha_pago,
-      soporte_url: soporte_url || null,
-      estado: 'IDENTIFICADO',
+      incapacidad_id: caso.id, entidad_id: caso.entidad_id, valor, fecha_pago: req.body.fecha_pago,
+      soporte_url: soporte, estado: 'IDENTIFICADO',
     });
-
-    const diferencia = Number(valor) - Number(caso.valor_solicitado || 0);
-    const actualizada = await cambiarEstado(caso.id, 'PAGO_NOTIFICADO', req.usuario, { valor, diferencia });
-    await notificarAuxiliares(
-      `Pago notificado ${caso.numero_caso}`,
-      `Valor: ${valor}. ${diferencia !== 0 ? `Diferencia contra lo esperado: ${diferencia} (revisar en CU-24).` : ''} Pendiente de conciliación.`
-    );
-    res.json({ caso: actualizada, pago, diferencia });
+    const diferencia = valor - Number(caso.valor_solicitado || 0);
+    await cambiarEstado(caso.id, 'PAGO_NOTIFICADO', req.usuario, { valor, diferencia });
+    await notificarAuxiliares(`Pago notificado ${caso.numero_caso}`, `La entidad pagó ${valor.toLocaleString('es-CO')}. Pendiente de conciliación.`);
+    res.json({
+      pago, diferencia,
+      mensaje: 'Pago registrado; queda pendiente de conciliar con Contabilidad.' +
+        (diferencia ? ` Diferencia contra lo esperado: ${diferencia.toLocaleString('es-CO')}.` : '') +
+        (soporte ? '' : ' Falta el soporte de liquidación: sin él no se podrá archivar.'),
+    });
   }),
 };

@@ -1,135 +1,125 @@
 // VerificacionController - Módulo "Verificación documental" (CU-07 a CU-10)
-import {
-  repoIncapacidades, repoDocumentos, repoFormatos, listarIncapacidades,
-  incapacidadCompleta, registrarBitacora,
-} from '../repositories/index.js';
+import { repoIncapacidades, repoDocumentos, repoFormatos, listarIncapacidades, registrarBitacora } from '../repositories/index.js';
 import { ReglasIncapacidadService } from '../services/ReglasIncapacidadService.js';
 import { NotificacionService } from '../services/NotificacionService.js';
 import { DocumentoService } from '../services/DocumentoService.js';
 import { IaOcrService } from '../services/IaOcrService.js';
-import { cambiarEstado, asyncHandler, diasAcumulados } from './_helpers.js';
+import { cambiarEstado, asyncHandler, diasAcumulados, casoOError, errorHttp } from './_helpers.js';
 import { config } from '../../config/config.js';
 
+const NOMBRES_DOC = {
+  CERTIFICADO: 'certificado de incapacidad', EPICRISIS: 'epicrisis', FURIPS: 'FURIPS',
+  NACIDO_VIVO: 'certificado de nacido vivo', REGISTRO_CIVIL: 'registro civil', DOC_IDENTIDAD: 'documento de identidad',
+};
+const listaDocs = (tipos) => tipos.map((t) => NOMBRES_DOC[t] || t).join(', ');
+const MAX_BYTES_IA = 15 * 1024 * 1024;
+
 export const VerificacionController = {
-  // GET /api/verificacion/pendientes - bandeja "Pendientes de verificación" (más antiguo primero)
+  // GET /api/verificacion/pendientes - bandeja de verificación, del más antiguo al más reciente
   pendientes: asyncHandler(async (_req, res) => {
     const casos = await listarIncapacidades({ estado: ['RECIBIDA', 'DOCUMENTACION_INCOMPLETA'] });
-    res.json(casos.sort((a, b) => new Date(a.created_at) - new Date(b.created_at)));
+    res.json(casos
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+      .map((c) => ({ ...c, documentos_requeridos: ReglasIncapacidadService.documentosRequeridos(c.tipo, { dias: c.dias }) })));
   }),
 
   /**
    * CU-07 · Verificar documentación.
-   * body: { conformidades: [{documento_id, conforme}], ibc?, observaciones? }
-   * Si está completa ejecuta CU-08 («include»: formato de seguimiento) y deja VERIFICADA.
-   * Si falta algo ejecuta CU-09 («extend»: solicitar faltantes).
+   * body: { conformes: [documento_id, ...], ibc?, observaciones? }
+   * Los documentos no incluidos en `conformes` quedan como no conformes.
+   * Completa: diligencia el formato de seguimiento (CU-08), archiva en digital (CU-10) y deja Verificada.
+   * Incompleta: solicita los faltantes al colaborador con plazo de 3 días hábiles (CU-09).
    */
   verificar: asyncHandler(async (req, res) => {
-    const caso = await incapacidadCompleta(req.params.id);
-    if (!caso) return res.status(404).json({ error: 'Caso no encontrado' });
+    const caso = await casoOError(req.params.id, ['RECIBIDA', 'DOCUMENTACION_INCOMPLETA'], 'verificación');
+    const conformes = new Set([].concat(req.body.conformes || []));
 
-    // Marcar cada documento como conforme / no conforme
-    for (const c of req.body.conformidades || []) {
-      await DocumentoService.marcarEstado(c.documento_id, c.conforme ? 'CONFORME' : 'NO_CONFORME');
+    for (const d of caso.documentos.filter((x) => ['CARGADO', 'EN_REVISION', 'CONFORME', 'NO_CONFORME'].includes(x.estado))) {
+      await DocumentoService.marcarEstado(d.id, conformes.has(d.id) ? 'CONFORME' : 'NO_CONFORME');
     }
-
     const documentos = await repoDocumentos.listar({ incapacidad_id: caso.id });
-    const conformes = documentos.filter((d) => d.estado === 'CONFORME');
-    const faltantes = ReglasIncapacidadService.documentosFaltantes(caso.tipo, conformes, { dias: caso.dias });
+    const faltantes = ReglasIncapacidadService.documentosFaltantes(
+      caso.tipo, documentos.filter((d) => d.estado === 'CONFORME'), { dias: caso.dias }
+    );
 
-    // Punto de extensión: documentación incompleta -> CU-09
-    if (faltantes.length > 0) {
-      const limite = ReglasIncapacidadService.sumarDiasHabiles(new Date(), config.plazos.documentacionFaltanteDiasHabiles);
-      const actualizada = await cambiarEstado(caso.id, 'DOCUMENTACION_INCOMPLETA', req.usuario, { faltantes });
-      await NotificacionService.notificarUsuario(
-        caso.colaborador?.usuario?.id,
-        `Documentación faltante - ${caso.numero_caso}`,
-        `Faltan: ${faltantes.join(', ')}. Plazo: 3 días hábiles (hasta ${limite.toISOString().slice(0, 10)}).`
-      );
-      return res.json({ caso: actualizada, faltantes, fecha_limite: limite, accion: 'CU-09: solicitud de faltantes enviada' });
+    if (faltantes.length) {
+      const limite = ReglasIncapacidadService.sumarDiasHabiles(new Date(), config.plazos.documentacionFaltanteDiasHabiles)
+        .toISOString().slice(0, 10);
+      await cambiarEstado(caso.id, 'DOCUMENTACION_INCOMPLETA', req.usuario, { faltantes });
+      await NotificacionService.notificarUsuario(caso.colaborador?.usuario?.id, `Soportes pendientes · ${caso.numero_caso}`,
+        `Faltan o no son válidos: ${listaDocs(faltantes)}. Tiene plazo hasta el ${limite} (3 días hábiles) para entregarlos.` +
+        (req.body.observaciones ? ` Observación: ${req.body.observaciones}` : ''));
+      return res.json({ completa: false, faltantes, fecha_limite: limite,
+        mensaje: `Documentación incompleta. Se solicitó al colaborador: ${listaDocs(faltantes)}. Plazo: ${limite}.` });
     }
 
-    // CU-08 «include» · Diligenciar formato de seguimiento con liquidación RN-06
-    const ibc = Number(req.body.ibc ?? caso.colaborador?.ibc ?? 0);
-    const acumuladosPrevios = (await diasAcumulados(caso)) - caso.dias;
-    const liquidacion = ReglasIncapacidadService.liquidar({
-      tipo: caso.tipo, dias: caso.dias, ibc, diasAcumulados: acumuladosPrevios,
-    });
+    // Formato de seguimiento con la liquidación según días acumulados
+    const ibc = Number(req.body.ibc || caso.colaborador?.ibc || 0);
+    const previos = (await diasAcumulados(caso)) - caso.dias;
+    const liq = ReglasIncapacidadService.liquidar({ tipo: caso.tipo, dias: caso.dias, ibc, diasAcumulados: previos });
     const versiones = await repoFormatos.listar({ incapacidad_id: caso.id });
     const formato = await repoFormatos.crear({
-      incapacidad_id: caso.id,
-      version: versiones.length + 1,
-      ibc,
-      dias_empresa: liquidacion.diasEmpresa,
-      valor_empresa: liquidacion.valorEmpresa,
-      dias_entidad: liquidacion.diasEntidad,
-      valor_entidad: liquidacion.valorEntidad,
-      dias_acumulados: acumuladosPrevios + caso.dias,
-      observaciones: req.body.observaciones || null,
+      incapacidad_id: caso.id, version: versiones.length + 1, ibc,
+      dias_empresa: liq.diasEmpresa, valor_empresa: liq.valorEmpresa,
+      dias_entidad: liq.diasEntidad, valor_entidad: liq.valorEntidad,
+      dias_acumulados: previos + caso.dias, observaciones: req.body.observaciones || null,
     });
-    await repoIncapacidades.actualizar(caso.id, { valor_solicitado: liquidacion.valorEntidad });
+    await repoIncapacidades.actualizar(caso.id, { valor_solicitado: liq.valorEntidad });
 
-    const actualizada = await cambiarEstado(caso.id, 'VERIFICADA', req.usuario);
-    await registrarBitacora(req.usuario.id, 'CU-07:VERIFICADA', { numero_caso: caso.numero_caso });
-    res.json({
-      caso: actualizada, formato_seguimiento: formato, liquidacion,
-      advertencias: liquidacion.advertencias,
-      mensaje: ibc ? undefined : 'IBC desconocido: el formato queda pendiente de IBC (CU-08 2a).',
-    });
-  }),
-
-  /**
-   * CU-09 · Segundo llamado por documentación faltante.
-   */
-  segundoLlamado: asyncHandler(async (req, res) => {
-    const caso = await incapacidadCompleta(req.params.id);
-    if (!caso) return res.status(404).json({ error: 'Caso no encontrado' });
-    await NotificacionService.notificarUsuario(
-      caso.colaborador?.usuario?.id,
-      `Segundo llamado - ${caso.numero_caso}`,
-      'De no entregar la documentación será citado con la coordinación de Administración de Personal.'
-    );
-    await registrarBitacora(req.usuario.id, 'CU-09:SEGUNDO_LLAMADO', { numero_caso: caso.numero_caso });
-    res.json({ mensaje: 'Segundo llamado registrado y notificado al colaborador.' });
-  }),
-
-  /**
-   * CU-10 · Archivar documentación digital: marca los soportes conformes
-   * como ARCHIVADO_DIGITAL (la ruta/nombre ya sigue la convención del DocumentoService).
-   */
-  archivarDigital: asyncHandler(async (req, res) => {
-    const caso = await incapacidadCompleta(req.params.id);
-    if (!caso) return res.status(404).json({ error: 'Caso no encontrado' });
-    if (caso.estado !== 'VERIFICADA' && caso.estado !== 'TRANSCRITA') {
-      return res.status(422).json({ error: 'El caso debe estar VERIFICADA para archivar en digital (CU-10)' });
-    }
-    const documentos = await repoDocumentos.listar({ incapacidad_id: caso.id });
+    // Archivo digital de los soportes conformes
     for (const d of documentos.filter((x) => x.estado === 'CONFORME')) {
       await DocumentoService.marcarEstado(d.id, 'ARCHIVADO_DIGITAL');
     }
-    await registrarBitacora(req.usuario.id, 'CU-10:ARCHIVO_DIGITAL', { numero_caso: caso.numero_caso });
-    res.json({ mensaje: 'Soportes archivados digitalmente por Entidad/Año/Colaborador_FechaInicio.' });
+    await cambiarEstado(caso.id, 'VERIFICADA', req.usuario);
+    await registrarBitacora(req.usuario.id, 'VERIFICACION_COMPLETA', { numero_caso: caso.numero_caso, formato: formato.id });
+
+    res.json({
+      completa: true, formato_seguimiento: formato, liquidacion: liq,
+      mensaje: `Caso ${caso.numero_caso} verificado. A cargo de la empresa: ${liq.diasEmpresa} día(s); a cargo de la entidad: ${liq.diasEntidad} día(s).` +
+        (ibc ? '' : ' El colaborador no tiene IBC registrado: los valores quedaron en cero.') +
+        (liq.advertencias.length ? ` ${liq.advertencias.join(' ')}` : ''),
+    });
+  }),
+
+  /** CU-09 · Segundo llamado por documentación faltante. */
+  segundoLlamado: asyncHandler(async (req, res) => {
+    const caso = await casoOError(req.params.id, ['DOCUMENTACION_INCOMPLETA'], 'un segundo llamado');
+    await NotificacionService.notificarUsuario(caso.colaborador?.usuario?.id, `Segundo llamado · ${caso.numero_caso}`,
+      'No hemos recibido los soportes pendientes. De no entregarlos, será citado con la coordinación de Administración de Personal.');
+    await registrarBitacora(req.usuario.id, 'SEGUNDO_LLAMADO', { numero_caso: caso.numero_caso });
+    res.json({ mensaje: 'Segundo llamado enviado al colaborador.' });
   }),
 
   /**
-   * IA (sugerencia CU-07): preverificar soportes y resaltar inconsistencias.
+   * IA · Analiza los archivos digitales del caso con Gemini: tipo real del documento,
+   * legibilidad y coherencia con los datos registrados. Las epicrisis no se envían (reserva clínica).
    */
-  preverificarIA: asyncHandler(async (req, res) => {
-    const caso = await incapacidadCompleta(req.params.id);
-    if (!caso) return res.status(404).json({ error: 'Caso no encontrado' });
-    const requeridos = ReglasIncapacidadService.documentosRequeridos(caso.tipo, { dias: caso.dias });
-    const resultado = await IaOcrService.preverificarSoportes({
-      incapacidad: {
-        numero_caso: caso.numero_caso, tipo: caso.tipo, estado: caso.estado,
-        fecha_inicio: caso.fecha_inicio, dias: caso.dias,
+  analizarSoportesIA: asyncHandler(async (req, res) => {
+    const caso = await casoOError(req.params.id);
+    const candidatos = caso.documentos.filter((d) => d.url && !d.es_reservado && d.estado !== 'DESTRUIDO');
+    const archivos = [];
+    let bytes = 0;
+    for (const d of candidatos) {
+      const a = await DocumentoService.descargar(d.url);
+      if (!a || bytes + a.bytes > MAX_BYTES_IA) continue;
+      bytes += a.bytes;
+      archivos.push({ tipo: d.tipo_documento, ...a });
+    }
+    if (!archivos.length) {
+      throw errorHttp('El caso no tiene soportes digitales que analizar (solo entregas físicas o epicrisis reservada).', 422);
+    }
+
+    const resultado = await IaOcrService.analizarSoportes({
+      caso: {
         colaborador: caso.colaborador?.usuario?.nombre,
-        documento: caso.colaborador?.usuario?.documento,
-        entidad: caso.entidad?.nombre, diagnostico: caso.diagnostico_cie10,
+        documento_identidad: caso.colaborador?.usuario?.documento,
+        tipo: caso.tipo, fecha_inicio: caso.fecha_inicio, dias: caso.dias, entidad: caso.entidad?.nombre,
       },
-      documentosRequeridos: requeridos,
-      documentosCargados: (caso.documentos || []).map((d) => ({
-        tipo: d.tipo_documento, estado: d.estado, archivo: d.nombre_archivo,
-      })),
+      requeridos: ReglasIncapacidadService.documentosRequeridos(caso.tipo, { dias: caso.dias }),
+      archivos,
     });
-    res.json(resultado);
+    const omitidos = caso.documentos.filter((d) => d.es_reservado && d.url).length;
+    res.json({ ...resultado, analizados: archivos.length,
+      nota: omitidos ? 'La epicrisis no se envía a la IA por ser información clínica reservada.' : null });
   }),
 };

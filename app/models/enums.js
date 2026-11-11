@@ -49,16 +49,19 @@ export const TransicionesEstado = Object.freeze({
   REPORTADA: ['DOCUMENTACION_REMITIDA', 'RECIBIDA'],
   DOCUMENTACION_REMITIDA: ['RECIBIDA'],
   RECIBIDA: ['VERIFICADA', 'DOCUMENTACION_INCOMPLETA'],
-  DOCUMENTACION_INCOMPLETA: ['RECIBIDA'],
+  // El colaborador entrega los faltantes (vuelve a Recibida) o el auxiliar los recibe y verifica
+  DOCUMENTACION_INCOMPLETA: ['RECIBIDA', 'VERIFICADA'],
   VERIFICADA: ['TRANSCRITA', 'RADICADA'],
   TRANSCRITA: ['RADICADA', 'RECHAZADA'],
   RADICADA: ['ACEPTADA', 'RECHAZADA'],
-  RECHAZADA: ['TRANSCRITA', 'VERIFICADA'],
+  // Subsanar y volver a transcribir, o trasladar a jurídica si la causal es improcedente (5.4.2)
+  RECHAZADA: ['TRANSCRITA', 'VERIFICADA', 'EN_COBRO_JURIDICO'],
   ACEPTADA: ['COBRADA'],
   COBRADA: ['EN_COBRO_PERSUASIVO', 'PAGO_NOTIFICADO'],
   EN_COBRO_PERSUASIVO: ['EN_COBRO_JURIDICO', 'PAGO_NOTIFICADO'],
   EN_COBRO_JURIDICO: ['PAGO_NOTIFICADO', 'DADA_DE_BAJA'],
-  PAGO_NOTIFICADO: ['PAGADA'],
+  // Pago parcial en la conciliación: el saldo vuelve a cobro
+  PAGO_NOTIFICADO: ['PAGADA', 'COBRADA'],
   PAGADA: ['ARCHIVADA'],
   DADA_DE_BAJA: [],
   ARCHIVADA: [],

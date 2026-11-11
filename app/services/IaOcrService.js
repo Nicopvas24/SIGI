@@ -1,178 +1,188 @@
-// IaOcrService - Módulo de IA para análisis de información (nota final del
-// procedimiento: "Utilizar un modelo de inteligencia artificial para análisis
-// de información"). Usa la API de Claude (Anthropic).
+// IaOcrService - Módulo de IA para análisis de información con Google Gemini
+// (nota final del procedimiento: "Utilizar un modelo de inteligencia
+// artificial para análisis de información").
 //
 // Capacidades:
-//  1. extraerDatosCertificado  - IA/OCR del certificado de incapacidad (CU-06 paso 4)
-//  2. preverificarSoportes     - preverificación e inconsistencias (CU-07, sugerencia)
-//  3. analizarAusentismo       - análisis del informe mensual SG-SST (CU-16)
-//  4. predecirRiesgo180        - anticipar incapacidades que superarían 180 días (CU-26)
-import Anthropic from '@anthropic-ai/sdk';
+//  1. leerCertificado       - lee un certificado (PDF/imagen) y propone los datos del caso
+//  2. analizarSoportes      - analiza los soportes digitales de un caso (legibilidad, coherencia)
+//  3. resumirColaborador    - resumen del historial de incapacidades de un colaborador
+//  4. analizarAusentismo    - análisis del informe mensual para el SG-SST
+//  5. predecirRiesgo180     - casos que podrían superar 180 días acumulados
+import { GoogleGenAI } from '@google/genai';
 import { config } from '../../config/config.js';
 
-const MODEL = config.ia.model;
-
-// El cliente se crea solo cuando hay ANTHROPIC_API_KEY. Sin clave, el resto
-// del sistema funciona normal y los endpoints de IA responden 503 (pendiente).
-let client = null;
+let cliente = null;
 function obtenerCliente() {
   if (!config.ia.habilitada) {
     throw Object.assign(
-      new Error('El módulo de IA aún no está configurado (falta ANTHROPIC_API_KEY en .env).'),
-      { status: 503 }
+      new Error('El asistente de IA no está configurado. Defina GEMINI_API_KEY en el archivo .env.'),
+      { status: 503, propio: true }
     );
   }
-  client ??= new Anthropic({ apiKey: config.ia.apiKey });
-  return client;
+  cliente ??= new GoogleGenAI({ apiKey: config.ia.apiKey });
+  return cliente;
 }
 
-async function pedirJSON({ system, contenido, maxTokens = 8000 }) {
-  const response = await obtenerCliente().messages.create({
-    model: MODEL,
-    max_tokens: maxTokens,
-    thinking: { type: 'adaptive' },
-    system:
-      system +
-      '\nResponde ÚNICAMENTE con un objeto JSON válido, sin texto adicional ni bloques de código.',
-    messages: [{ role: 'user', content: contenido }],
-  });
+const BASE_SISTEMA =
+  'Eres el asistente de análisis de SIGI, el sistema de gestión de incapacidades de Gestión Humana ' +
+  'de una empresa colombiana (EPS, ARL, licencias de maternidad y paternidad). Responde en español, ' +
+  'con frases claras y concretas. Protege la reserva clínica: no transcribas detalles médicos más allá ' +
+  'del código CIE-10. Responde únicamente con JSON válido que siga el esquema indicado.';
 
-  if (response.stop_reason === 'refusal') {
-    throw Object.assign(new Error('El modelo declinó procesar esta solicitud.'), { status: 422 });
-  }
-  const texto = response.content
-    .filter((b) => b.type === 'text')
-    .map((b) => b.text)
-    .join('')
-    .trim();
+/**
+ * Llama a Gemini y devuelve el JSON de la respuesta.
+ * `partes` es la lista de partes del mensaje: { text } o { inlineData: { mimeType, data } }.
+ */
+async function pedirJSON(partes, instruccion = '') {
+  let response;
   try {
+    response = await obtenerCliente().models.generateContent({
+      model: config.ia.model,
+      contents: [{ role: 'user', parts: partes }],
+      config: {
+        systemInstruction: BASE_SISTEMA + (instruccion ? `\n${instruccion}` : ''),
+        responseMimeType: 'application/json',
+        temperature: 0.2,
+      },
+    });
+  } catch (e) {
+    throw traducirError(e);
+  }
+
+  const texto = (response.text || '').trim();
+  if (!texto) {
+    throw Object.assign(new Error('La IA no devolvió contenido (posible bloqueo por políticas de seguridad).'), { status: 422 });
+  }
+  try {
+    return JSON.parse(texto);
+  } catch {
     const inicio = texto.indexOf('{');
     const fin = texto.lastIndexOf('}');
-    return JSON.parse(texto.slice(inicio, fin + 1));
-  } catch {
-    return { error: 'No se pudo interpretar la respuesta de la IA', bruto: texto };
+    try { return JSON.parse(texto.slice(inicio, fin + 1)); } catch { /* sigue abajo */ }
+    throw Object.assign(new Error('La respuesta de la IA no tiene un formato válido. Intente de nuevo.'), { status: 502 });
   }
 }
 
-export const IaOcrService = {
-  /**
-   * CU-06 paso 4: a partir de la imagen/PDF (base64) o del texto de un
-   * certificado, propone fechas, días, diagnóstico y entidad.
-   */
-  async extraerDatosCertificado({ imagenBase64, mediaType, texto }) {
-    const contenido = [];
-    if (imagenBase64) {
-      if (mediaType === 'application/pdf') {
-        contenido.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: imagenBase64 } });
-      } else {
-        contenido.push({ type: 'image', source: { type: 'base64', media_type: mediaType || 'image/png', data: imagenBase64 } });
-      }
-    }
-    contenido.push({
-      type: 'text',
-      text:
-        (texto ? `Texto del certificado:\n${texto}\n\n` : '') +
-        `Extrae los datos del certificado de incapacidad colombiano. Esquema:
-{
-  "nombre_colaborador": string|null, "documento": string|null,
-  "entidad": string|null, "tipo_novedad": "ENFERMEDAD_GENERAL"|"ACCIDENTE_LABORAL"|"ACCIDENTE_TRANSITO"|"LICENCIA_MATERNIDAD"|"LICENCIA_PATERNIDAD"|null,
-  "fecha_inicio": "YYYY-MM-DD"|null, "dias": number|null,
-  "diagnostico_cie10": string|null, "diagnostico_descripcion": string|null,
-  "confianza": "ALTA"|"MEDIA"|"BAJA",
-  "campos_dudosos": string[]
+function traducirError(e) {
+  if (e.propio) return e;
+  const status = Number(e.status) || 502;
+  const mensajes = {
+    400: 'La solicitud a la IA no es válida (revise el archivo o la clave GEMINI_API_KEY).',
+    401: 'La clave GEMINI_API_KEY no es válida.',
+    403: 'La clave GEMINI_API_KEY no tiene permiso para usar la API de Gemini.',
+    404: `El modelo "${config.ia.model}" no está disponible. Revise GEMINI_MODEL en .env.`,
+    429: 'Se agotó la cuota gratuita de la API de Gemini. Espere un momento e intente de nuevo.',
+    503: 'El servicio de Gemini está saturado en este momento. Intente de nuevo en unos segundos.',
+  };
+  const err = new Error(mensajes[status] || `Error del servicio de IA: ${e.message}`);
+  err.status = status === 401 || status === 403 ? 502 : status;
+  console.error('[IaOcrService]', e.message);
+  return err;
 }
-Si la confianza de un campo es baja, inclúyelo en campos_dudosos (CU-06 4b: se marcará para revisión manual).`,
-    });
 
-    return pedirJSON({
-      system: 'Eres el módulo IA/OCR de SIGI. Extraes datos de certificados de incapacidad de EPS/ARL colombianas.',
-      contenido,
-    });
+const texto = (t) => ({ text: t });
+const archivo = (mimeType, base64) => ({ inlineData: { mimeType, data: base64 } });
+
+export const IaOcrService = {
+  /** Lee un certificado de incapacidad (PDF o imagen) y propone los datos del caso. */
+  async leerCertificado({ mimeType, base64 }) {
+    return pedirJSON([
+      archivo(mimeType, base64),
+      texto(`Lee este certificado de incapacidad o licencia y extrae sus datos.
+Esquema:
+{
+  "nombre_colaborador": string|null,
+  "documento": string|null,
+  "entidad": string|null,
+  "tipo_novedad": "ENFERMEDAD_GENERAL"|"ACCIDENTE_LABORAL"|"ACCIDENTE_TRANSITO"|"LICENCIA_MATERNIDAD"|"LICENCIA_PATERNIDAD"|null,
+  "fecha_inicio": "YYYY-MM-DD"|null,
+  "dias": number|null,
+  "diagnostico_cie10": string|null,
+  "es_prorroga": boolean|null,
+  "legible": boolean,
+  "confianza": "ALTA"|"MEDIA"|"BAJA",
+  "campos_dudosos": string[],
+  "observaciones": string
+}
+Si el documento no es un certificado de incapacidad, pon legible=false y explícalo en observaciones.`),
+    ]);
   },
 
   /**
-   * CU-07 (sugerencia): preverifica los soportes y resalta inconsistencias
-   * entre el certificado, el colaborador y la lista de chequeo.
+   * Analiza los soportes digitales de un caso: tipo real de cada documento,
+   * legibilidad y coherencia con los datos del caso.
    */
-  async preverificarSoportes({ incapacidad, documentosRequeridos, documentosCargados }) {
-    return pedirJSON({
-      system: 'Eres el asistente de verificación documental de SIGI (Gestión Humana, Colombia).',
-      contenido: [
-        {
-          type: 'text',
-          text: `Preverifica este caso de incapacidad y resalta inconsistencias.
-Caso: ${JSON.stringify(incapacidad)}
-Documentos requeridos por el tipo: ${JSON.stringify(documentosRequeridos)}
-Documentos cargados: ${JSON.stringify(documentosCargados)}
-Esquema de respuesta:
+  async analizarSoportes({ caso, requeridos, archivos }) {
+    const partes = [];
+    archivos.forEach((a, i) => {
+      partes.push(texto(`Documento ${i + 1} - registrado como "${a.tipo}":`));
+      partes.push(archivo(a.mimeType, a.base64));
+    });
+    partes.push(texto(`Datos del caso registrados en el sistema: ${JSON.stringify(caso)}
+Documentos que exige el tipo de novedad: ${JSON.stringify(requeridos)}
+Revisa cada documento: ¿es del tipo registrado?, ¿es legible?, ¿el nombre, documento de identidad, fechas
+y días coinciden con el caso? Esquema:
 {
   "apto_para_verificar": boolean,
-  "faltantes": string[],
+  "documentos": [ { "numero": number, "tipo_registrado": string, "tipo_detectado": string,
+                    "legible": boolean, "coincide_con_caso": boolean, "observacion": string } ],
   "inconsistencias": string[],
-  "recomendaciones": string[]
-}`,
-        },
-      ],
-    });
+  "faltantes": string[],
+  "recomendacion": string
+}`));
+    return pedirJSON(partes);
   },
 
-  /**
-   * CU-16: análisis del ausentismo mensual (días perdidos, índices de
-   * frecuencia y severidad, patrones por área/diagnóstico).
-   */
+  /** Resumen del historial de incapacidades de un colaborador para Gestión Humana. */
+  async resumirColaborador({ colaborador, estadisticas, casos }) {
+    return pedirJSON([
+      texto(`Resume el historial de incapacidades de este colaborador para la coordinación de Gestión Humana.
+Colaborador: ${JSON.stringify(colaborador)}
+Estadísticas calculadas por el sistema: ${JSON.stringify(estadisticas)}
+Casos (del más reciente al más antiguo): ${JSON.stringify(casos)}
+Ten en cuenta los hitos legales: concepto de rehabilitación antes del día 120 acumulado, envío al fondo
+de pensiones antes del día 150 y suspensión del pago por nómina desde el día 181.
+Esquema:
+{
+  "resumen": string,
+  "situacion_actual": string,
+  "patrones": string[],
+  "alertas": string[],
+  "recomendaciones": string[]
+}`),
+    ]);
+  },
+
+  /** Análisis del ausentismo mensual para el informe al SG-SST (datos anonimizados). */
   async analizarAusentismo({ periodo, resumen, registros }) {
-    return pedirJSON({
-      system:
-        'Eres el analista de ausentismo laboral de SIGI para el informe mensual al SG-SST. ' +
-        'Protege la reserva clínica: refiérete a los diagnósticos solo por código CIE-10 agrupado.',
-      contenido: [
-        {
-          type: 'text',
-          text: `Analiza el ausentismo del periodo ${periodo}.
+    return pedirJSON([
+      texto(`Analiza el ausentismo laboral del periodo ${periodo} para el informe mensual al SG-SST.
 Resumen calculado por el sistema: ${JSON.stringify(resumen)}
-Registros (anonimizados): ${JSON.stringify(registros)}
+Registros anonimizados: ${JSON.stringify(registros)}
 Esquema:
 {
   "resumen_ejecutivo": string,
   "hallazgos": string[],
-  "patrones_detectados": string[],
   "areas_criticas": string[],
   "recomendaciones_sgsst": string[]
-}`,
-        },
-      ],
-      maxTokens: 10000,
-    });
+}`),
+    ]);
   },
 
-  /**
-   * CU-26 (sugerencia): anticipa qué incapacidades podrían superar los
-   * 180 días para disparar a tiempo el concepto de rehabilitación.
-   */
+  /** Estima qué casos activos podrían superar 180 días acumulados. */
   async predecirRiesgo180({ casos }) {
-    return pedirJSON({
-      system:
-        'Eres el módulo predictivo de SIGI. Estimas el riesgo de que una incapacidad ' +
-        'acumulada supere 180 días, considerando días acumulados, prórrogas y tipo de novedad.',
-      contenido: [
-        {
-          type: 'text',
-          text: `Evalúa el riesgo de superar 180 días para estos casos activos:
-${JSON.stringify(casos)}
+    return pedirJSON([
+      texto(`Evalúa el riesgo de que cada caso activo supere 180 días acumulados de incapacidad,
+según días acumulados, prórrogas, tipo de novedad y diagnóstico agrupado.
+Casos: ${JSON.stringify(casos)}
+Acciones posibles: solicitar el concepto de rehabilitación (antes del día 120), enviarlo al fondo de
+pensiones (antes del día 150) o notificar la suspensión del pago por nómina (desde el día 181).
 Esquema:
 {
-  "evaluaciones": [
-    { "numero_caso": string, "riesgo": "ALTO"|"MEDIO"|"BAJO",
-      "dias_acumulados": number, "razonamiento": string,
-      "accion_sugerida": string }
-  ],
+  "evaluaciones": [ { "numero_caso": string, "riesgo": "ALTO"|"MEDIO"|"BAJO", "dias_acumulados": number,
+                      "razonamiento": string, "accion_sugerida": string } ],
   "conclusion": string
-}
-Acciones posibles: solicitar concepto de rehabilitación (antes del día 120, CU-27),
-enviar concepto al AFP (antes del día 150), notificar suspensión de pago por nómina (día 181, CU-28).`,
-        },
-      ],
-      maxTokens: 10000,
-    });
+}`),
+    ]);
   },
 };

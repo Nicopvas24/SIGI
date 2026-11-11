@@ -10,11 +10,11 @@ export const config = {
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
     bucket: process.env.SUPABASE_BUCKET || 'documentos',
   },
+  // IA: Google Gemini (https://aistudio.google.com/apikey). Se activa al definir GEMINI_API_KEY.
   ia: {
-    apiKey: process.env.ANTHROPIC_API_KEY || '',
-    // Fase actual: IA pendiente. Se activa sola al definir ANTHROPIC_API_KEY.
-    habilitada: Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
-    model: process.env.ANTHROPIC_MODEL || 'claude-opus-5-5',
+    apiKey: process.env.GEMINI_API_KEY?.trim() || '',
+    habilitada: Boolean(process.env.GEMINI_API_KEY?.trim()),
+    model: process.env.GEMINI_MODEL?.trim() || 'gemini-flash-latest',
   },
   // Plazos del procedimiento de Gestión Humana
   plazos: {

@@ -1,38 +1,55 @@
-// Vista Monitoreo (CU-26/27/28) + predicción con IA
+// Vista Monitoreo de días acumulados + predicción con IA
 import { useEffect, useState } from 'react';
 import { Activity, Check } from 'lucide-react';
 import { api } from '../api.js';
-import { Aviso, Encabezado, MiniRegla, Panel, PanelIA, ReglaDias, Vacio } from '../ui.jsx';
+import { Aviso, Encabezado, MiniRegla, Panel, PanelIA, ReglaDias, Vacio, fecha, useDialogo } from '../ui.jsx';
 
 const RIESGO = { ALTO: 'alerta', MEDIO: 'pendiente', BAJO: 'cerrado' };
 
 export default function Dashboard() {
+  const dlg = useDialogo();
   const [reporte, setReporte] = useState(null);
   const [prediccion, setPrediccion] = useState(null);
   const [cargandoIA, setCargandoIA] = useState(false);
   const [msj, setMsj] = useState(null);
 
-  const cargar = () => api('/monitoreo/reporte').then(setReporte).catch((e) => setMsj({ t: 'error', m: e.message }));
+  const cargar = () => api('/monitoreo/reporte').then(setReporte).catch((e) => { setReporte({ filas: [] }); setMsj({ t: 'error', m: e.message }); });
   useEffect(() => { cargar(); }, []);
 
-  async function accionConcepto(id, accion, resultado) {
+  async function concepto(f, accion) {
+    let resultado;
+    if (accion === 'REGISTRAR') {
+      const r0 = await dlg.pedir({
+        titulo: `Concepto de rehabilitación · ${f.numero_caso}`,
+        descripcion: `${f.colaborador} acumula ${f.dias_acumulados} días. Registre el concepto emitido por la EPS.`,
+        textoAceptar: 'Registrar concepto',
+        campos: [{ nombre: 'resultado', etiqueta: 'Concepto', tipo: 'select', requerido: true,
+          opciones: [['FAVORABLE', 'Favorable'], ['DESFAVORABLE', 'Desfavorable']] }],
+      });
+      if (!r0) return;
+      resultado = r0.resultado;
+    }
     try {
-      const r = await api(`/incapacidades/${id}/concepto-rehabilitacion`, { method: 'POST', body: { accion, resultado } });
-      setMsj({ t: 'ok', m: r.alerta || 'Acción registrada.' });
+      const r = await api(`/incapacidades/${f.incapacidad_id}/concepto-rehabilitacion`, { method: 'POST', body: { accion, resultado } });
+      setMsj({ t: 'ok', m: r.mensaje });
       cargar();
     } catch (e) { setMsj({ t: 'error', m: e.message }); }
   }
 
-  async function suspender(id) {
+  async function suspender(f) {
+    const ok = await dlg.confirmar(`Suspender pago por nómina · ${f.colaborador}`,
+      `Acumula ${f.dias_acumulados} días. Se notificará al colaborador que desde el día 181 debe tramitar el pago ante su fondo de pensiones, y a nómina la novedad.`,
+      { textoAceptar: 'Notificar suspensión', peligro: true });
+    if (!ok) return;
     try {
-      const r = await api(`/incapacidades/${id}/suspension-nomina`, { method: 'POST', body: {} });
+      const r = await api(`/incapacidades/${f.incapacidad_id}/suspension-nomina`, { method: 'POST', body: {} });
       setMsj({ t: 'ok', m: r.mensaje });
     } catch (e) { setMsj({ t: 'error', m: e.message }); }
   }
 
   async function predecir() {
     setCargandoIA(true);
-    try { setPrediccion(await api('/ia/prediccion-180')); }
+    try { setPrediccion(await api('/ia/prediccion-180', { method: 'POST', body: {} })); }
     catch (e) { setMsj({ t: 'error', m: e.message }); }
     finally { setCargandoIA(false); }
   }
@@ -42,14 +59,11 @@ export default function Dashboard() {
 
   return (
     <div>
-      <Encabezado
-        titulo="Monitoreo de días acumulados"
-        descripcion="Casos que se acercan a los hitos legales de 90, 120, 150 y 180 días, sumando prórrogas."
-        refs={['CU-26', 'CU-27', 'CU-28']}
-      />
+      <Encabezado titulo="Monitoreo de días acumulados"
+        descripcion="Casos activos que se acercan a los hitos legales de 90, 120, 150 y 180 días, sumando las prórrogas." />
       <Aviso msj={msj} onCerrar={() => setMsj(null)} />
 
-      <Panel titulo="Regla de 180 días" sub={reporte ? `${filas.length} caso(s) con más de 90 días acumulados` : 'Cargando…'}>
+      <Panel titulo="Regla de 180 días" sub={reporte ? `${filas.length} caso(s) con 90 días o más acumulados` : 'Cargando…'}>
         <ReglaDias casos={marcas} />
       </Panel>
 
@@ -62,54 +76,51 @@ export default function Dashboard() {
                 <th className="th-acciones">Acciones</th>
               </tr></thead>
               <tbody>
-                {filas.map((f) => (
-                  <tr key={f.incapacidad_id} className={f.requiere_suspension_nomina || f.vencido_concepto_120 ? 'fila-alerta' : ''}>
-                    <td><span className="caso">{f.numero_caso}</span><span className="secundario-texto">{f.colaborador}</span></td>
-                    <td>{f.entidad}</td>
-                    <td><MiniRegla dias={f.dias_acumulados} /></td>
-                    <td>
-                      {f.concepto_rehabilitacion
-                        ? <>
-                            <span className={`sello ${f.concepto_rehabilitacion.resultado === 'DESFAVORABLE' ? 'alerta' : f.concepto_rehabilitacion.resultado ? 'cerrado' : ''}`}>
-                              {f.concepto_rehabilitacion.resultado || 'Solicitado'}
-                            </span>
-                            {f.concepto_rehabilitacion.enviado_afp && <span className="secundario-texto"><Check size={13} aria-hidden="true" /> Enviado al AFP</span>}
-                          </>
-                        : f.vencido_concepto_120
-                          ? <span className="texto-alerta">Vencido el día 120</span>
-                          : <span className="texto-tenue">Sin solicitar</span>}
-                    </td>
-                    <td>
-                      <div className="acciones">
-                        {!f.concepto_rehabilitacion && (
-                          <button onClick={() => accionConcepto(f.incapacidad_id, 'SOLICITAR')}>Solicitar concepto</button>
-                        )}
-                        {f.concepto_rehabilitacion && !f.concepto_rehabilitacion.resultado && (
-                          <button className="secundario" onClick={() => accionConcepto(f.incapacidad_id, 'REGISTRAR', 'FAVORABLE')}>Registrar favorable</button>
-                        )}
-                        {f.pendiente_envio_afp_150 && (
-                          <button className="secundario" onClick={() => accionConcepto(f.incapacidad_id, 'ENVIAR_AFP')}>Enviar al AFP</button>
-                        )}
-                        {f.requiere_suspension_nomina && (
-                          <button className="peligro" onClick={() => suspender(f.incapacidad_id)}>Suspender nómina</button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filas.map((f) => {
+                  const c = f.concepto_rehabilitacion;
+                  return (
+                    <tr key={f.incapacidad_id} className={f.requiere_suspension_nomina || f.vencido_concepto_120 ? 'fila-alerta' : ''}>
+                      <td><span className="caso">{f.numero_caso}</span><span className="secundario-texto">{f.colaborador}</span></td>
+                      <td>{f.entidad}</td>
+                      <td><MiniRegla dias={f.dias_acumulados} /></td>
+                      <td>
+                        {c
+                          ? <>
+                              <span className={`sello ${c.resultado === 'DESFAVORABLE' ? 'alerta' : c.resultado ? 'cerrado' : 'pendiente'}`}>
+                                {c.resultado ? c.resultado.toLowerCase() : 'Solicitado'}
+                              </span>
+                              <span className="secundario-texto">
+                                {c.enviado_afp ? <><Check size={13} aria-hidden="true" /> Enviado al fondo el {fecha(c.fecha_envio_afp)}</> : `Solicitado el ${fecha(c.fecha_solicitud)}`}
+                              </span>
+                            </>
+                          : f.vencido_concepto_120
+                            ? <span className="texto-alerta">Superó el día 120 sin concepto</span>
+                            : <span className="texto-tenue">Sin solicitar</span>}
+                      </td>
+                      <td>
+                        <div className="acciones">
+                          {!c && <button onClick={() => concepto(f, 'SOLICITAR')}>Solicitar concepto</button>}
+                          {c && !c.resultado && <button className="secundario" onClick={() => concepto(f, 'REGISTRAR')}>Registrar concepto</button>}
+                          {f.pendiente_envio_afp && <button className="secundario" onClick={() => concepto(f, 'ENVIAR_AFP')}>Enviar al fondo de pensiones</button>}
+                          {f.requiere_suspension_nomina && <button className="peligro" onClick={() => suspender(f)}>Suspender pago por nómina</button>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        ) : (
-          <Vacio icono={Activity} titulo="Ningún colaborador supera los 90 días">
-            Cuando un caso, con sus prórrogas, pase el día 90, aparecerá aquí con las acciones de cada hito.
+        ) : reporte && (
+          <Vacio icono={Activity} titulo="Ningún colaborador llega a 90 días">
+            Cuando un caso, sumando sus prórrogas, llegue al día 90, aparecerá aquí con las acciones de cada hito.
           </Vacio>
         )}
       </Panel>
 
       <PanelIA
         titulo="Predicción de casos que superarían 180 días"
-        descripcion="Estima el riesgo de cada caso activo según días acumulados, prórrogas y tipo de novedad."
+        descripcion="La IA estima el riesgo de cada caso activo según días acumulados, prórrogas, tipo de novedad y diagnóstico agrupado."
         accion="Ejecutar análisis"
         cargando={cargandoIA}
         onEjecutar={predecir}

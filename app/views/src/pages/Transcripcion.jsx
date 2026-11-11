@@ -1,8 +1,8 @@
-// Vista Transcripción y radicación (CU-11 a CU-15) + reporte SG-SST (CU-16)
+// Vista Transcripción y radicación + reporte de ausentismo al SG-SST
 import { useEffect, useState } from 'react';
 import { ExternalLink, Mail, Monitor, Stamp } from 'lucide-react';
-import { api } from '../api.js';
-import { Aviso, Encabezado, Panel, PanelIA, Vacio, tipo, useDialogo } from '../ui.jsx';
+import { api, formulario } from '../api.js';
+import { Aviso, Encabezado, Estado, Panel, PanelIA, TIPOS, Vacio, tipo, useDialogo } from '../ui.jsx';
 
 export default function Transcripcion() {
   const dlg = useDialogo();
@@ -15,38 +15,74 @@ export default function Transcripcion() {
   const cargar = () => api('/transcripcion/pendientes').then(setCasos).catch((e) => { setCasos([]); setMsj({ t: 'error', m: e.message }); });
   useEffect(() => { cargar(); }, []);
 
-  async function transcribir(caso) {
-    const porPortal = caso.canal_entidad === 'PORTAL_WEB';
-    const numero = await dlg.pedirTexto(`Transcribir ${caso.numero_caso}`, 'Número o constancia de transcripción', '', {
-      descripcion: `Canal de ${caso.entidad?.nombre}: ${porPortal ? 'portal web' : 'correo electrónico'}.`,
-      textoAceptar: 'Registrar transcripción',
-    });
-    if (!numero) return;
+  const accion = (fn) => async (c) => {
     try {
-      const r = await api(`/incapacidades/${caso.id}/transcribir`, {
-        method: 'POST',
-        body: { numero_transcripcion: numero, evidencia_url: `evidencias/transcripcion_${caso.numero_caso}.pdf` },
-      });
-      setMsj({ t: 'ok', m: r.mensaje });
-      cargar();
+      const r = await fn(c);
+      if (r) { setMsj({ t: 'ok', m: r.mensaje }); cargar(); }
     } catch (e) { setMsj({ t: 'error', m: e.message }); }
-  }
+  };
 
-  async function radicar(caso) {
-    const numero = await dlg.pedirTexto(`Radicar ${caso.numero_caso}`, 'Número de radicado', '', {
-      descripcion: `Radicación ante ${caso.entidad?.nombre}. La evidencia queda asociada a la gestión.`,
-      textoAceptar: 'Radicar',
+  const transcribir = accion(async (c) => {
+    const porPortal = c.canal_entidad === 'PORTAL_WEB';
+    const r0 = await dlg.pedir({
+      titulo: `Transcribir ${c.numero_caso}`,
+      descripcion: porPortal
+        ? `Ingrese al portal de ${c.entidad?.nombre}, diligencie el formato del tipo de incapacidad y registre aquí la constancia.`
+        : `${c.entidad?.nombre} transcribe por correo${c.entidad?.correo_contacto ? ` (${c.entidad.correo_contacto})` : ''}. Envíe los soportes y registre aquí la respuesta.`,
+      textoAceptar: 'Registrar transcripción',
+      campos: [
+        { nombre: 'numero_transcripcion', etiqueta: 'Número o constancia de transcripción', requerido: true },
+        { nombre: 'evidencia', etiqueta: 'Constancia (pantallazo o PDF)', tipo: 'file' },
+        { nombre: 'descripcion', etiqueta: 'Observaciones', tipo: 'textarea' },
+      ],
     });
-    if (!numero) return;
-    try {
-      const r = await api(`/incapacidades/${caso.id}/radicar`, {
-        method: 'POST',
-        body: { numero_radicado: numero, medio: 'WEB', evidencia_url: `evidencias/radicado_${caso.numero_caso}.pdf` },
-      });
-      setMsj({ t: 'ok', m: r.mensaje });
-      cargar();
-    } catch (e) { setMsj({ t: 'error', m: e.message }); }
-  }
+    if (!r0) return null;
+    const { evidencia, ...campos } = r0;
+    return api(`/incapacidades/${c.id}/transcribir`, { method: 'POST', formData: formulario(campos, { evidencia }) });
+  });
+
+  const radicar = accion(async (c) => {
+    const r0 = await dlg.pedir({
+      titulo: `Radicar ${c.numero_caso} ante ${c.entidad?.nombre}`,
+      descripcion: 'Radique el certificado, los soportes y los formatos de la entidad. La evidencia es obligatoria.',
+      textoAceptar: 'Radicar',
+      campos: [
+        { nombre: 'numero_radicado', etiqueta: 'Número de radicado', requerido: true },
+        { nombre: 'medio', etiqueta: 'Medio', tipo: 'select', vacio: false, opciones: [['WEB', 'Página web de la entidad'], ['FISICO', 'Físico en la oficina']], valor: 'WEB', requerido: true },
+        { nombre: 'evidencia', etiqueta: 'Evidencia (pantallazo, constancia o copia sellada)', tipo: 'file', requerido: true },
+        { nombre: 'descripcion', etiqueta: 'Observaciones (oficina, funcionario que recibe…)', tipo: 'textarea' },
+      ],
+    });
+    if (!r0) return null;
+    const { evidencia, ...campos } = r0;
+    return api(`/incapacidades/${c.id}/radicar`, { method: 'POST', formData: formulario(campos, { evidencia }) });
+  });
+
+  const rechazar = accion(async (c) => {
+    const causal = await dlg.pedirTexto(`Rechazo de la transcripción · ${c.numero_caso}`, 'Causal informada por la entidad', '', {
+      campo: { tipo: 'textarea' }, textoAceptar: 'Registrar rechazo', peligro: true,
+    });
+    if (!causal) return null;
+    return api(`/incapacidades/${c.id}/rechazar`, { method: 'POST', body: { causal } });
+  });
+
+  const subsanar = accion(async (c) => {
+    const descripcion = await dlg.pedirTexto(`Subsanar ${c.numero_caso}`, 'Cómo se subsanó la causal', '', {
+      descripcion: `Causal: ${c.causal_rechazo || 'no registrada'}. El caso vuelve a quedar listo para transcribir.`,
+      campo: { tipo: 'textarea' }, textoAceptar: 'Marcar como subsanado',
+    });
+    if (!descripcion) return null;
+    return api(`/incapacidades/${c.id}/subsanar`, { method: 'POST', body: { descripcion } });
+  });
+
+  const juridica = accion(async (c) => {
+    const causal = await dlg.pedirTexto(`Trasladar ${c.numero_caso} a jurídica`, 'Por qué la causal de rechazo es improcedente', '', {
+      descripcion: 'Use esta opción cuando la entidad negó la incapacidad con una causal que no aplica. Jurídica radicará un derecho de petición.',
+      campo: { tipo: 'textarea' }, textoAceptar: 'Trasladar a jurídica', peligro: true,
+    });
+    if (!causal) return null;
+    return api(`/incapacidades/${c.id}/trasladar-juridica`, { method: 'POST', body: { causal: `Rechazo improcedente: ${causal}` } });
+  });
 
   async function reporteSGSST(conIA) {
     setCargando(conIA ? 'ia' : 'reporte');
@@ -56,25 +92,25 @@ export default function Transcripcion() {
     finally { setCargando(null); }
   }
 
-  const ia = sgsst?.analisis_ia && !sgsst.analisis_ia.pendiente ? sgsst.analisis_ia : null;
+  const iaRes = sgsst?.analisis_ia;
+  const conteo = (estado) => (casos || []).filter((c) => c.estado === estado).length;
 
   return (
     <div>
-      <Encabezado
-        titulo="Transcripción y radicación"
-        descripcion="Casos verificados por transcribir ante la entidad, ordenados por el plazo que les queda."
-        refs={['CU-11', 'CU-16']}
-      />
+      <Encabezado titulo="Transcripción y radicación"
+        descripcion="Casos verificados por transcribir o radicar ante la entidad, ordenados por el plazo que les queda, y casos rechazados por subsanar." />
       <Aviso msj={msj} onCerrar={() => setMsj(null)} />
 
-      <Panel titulo="Por transcribir o radicar" sub={casos ? `${casos.length} caso(s)` : 'Cargando…'} cuerpo={false}>
+      <Panel titulo="Bandeja de trámite ante la entidad"
+        sub={casos ? `${conteo('VERIFICADA')} por transcribir o radicar · ${conteo('TRANSCRITA')} transcrito(s) por radicar · ${conteo('RECHAZADA')} rechazado(s)` : 'Cargando…'}
+        cuerpo={false}>
         {casos?.length ? (
           <div className="tabla-wrap">
             <table>
-              <thead><tr><th>Caso</th><th>Entidad</th><th>Canal</th><th>Plazo</th><th className="th-acciones">Acciones</th></tr></thead>
+              <thead><tr><th>Caso</th><th>Entidad</th><th>Canal</th><th>Estado y plazo</th><th className="th-acciones">Acciones</th></tr></thead>
               <tbody>
                 {casos.map((c) => (
-                  <tr key={c.id} className={c.plazo_vencido ? 'fila-alerta' : ''}>
+                  <tr key={c.id} className={c.plazo_vencido || c.estado === 'RECHAZADA' ? 'fila-alerta' : ''}>
                     <td>
                       <span className="caso">{c.numero_caso}</span>
                       <span className="secundario-texto">{c.colaborador?.usuario?.nombre} · {tipo(c.tipo)} · {c.dias} día(s)</span>
@@ -95,16 +131,27 @@ export default function Transcripcion() {
                       </span>
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      {c.plazo_vencido
-                        ? <><span className="sello alerta">Vencido</span><span className="secundario-texto">Requiere revisión de coordinación</span></>
-                        : c.prioritario
-                          ? <><span className="resaltado">Quedan {c.plazo_restante_dias} días</span><span className="secundario-texto">Prioritario</span></>
-                          : <>Quedan {c.plazo_restante_dias} días</>}
+                      <Estado valor={c.estado} />
+                      {c.estado === 'RECHAZADA' && <span className="secundario-texto texto-alerta" style={{ whiteSpace: 'normal' }}>{c.causal_rechazo || 'Sin causal'}</span>}
+                      {c.estado === 'VERIFICADA' && (c.plazo_vencido
+                        ? <span className="secundario-texto texto-alerta">Plazo de transcripción vencido</span>
+                        : <span className="secundario-texto">{c.prioritario ? <span className="resaltado">Quedan {c.plazo_restante_dias} días</span> : `Quedan ${c.plazo_restante_dias} días para transcribir`}</span>)}
+                      {c.estado === 'TRANSCRITA' && <span className="secundario-texto">Pendiente de radicar</span>}
                     </td>
                     <td>
                       <div className="acciones">
-                        <button className="secundario" onClick={() => radicar(c)}>Radicar</button>
-                        <button onClick={() => transcribir(c)} disabled={c.plazo_vencido}>Transcribir</button>
+                        {c.estado === 'VERIFICADA' && <>
+                          <button className="secundario" onClick={() => radicar(c)} title="Si la entidad no exige transcripción">Radicar directo</button>
+                          <button onClick={() => transcribir(c)} disabled={c.plazo_vencido} title={c.plazo_vencido ? 'Requiere autorización de la coordinación' : undefined}>Transcribir</button>
+                        </>}
+                        {c.estado === 'TRANSCRITA' && <>
+                          <button className="peligro" onClick={() => rechazar(c)}>Rechazo</button>
+                          <button onClick={() => radicar(c)}>Radicar</button>
+                        </>}
+                        {c.estado === 'RECHAZADA' && <>
+                          <button className="peligro" onClick={() => juridica(c)}>Causal improcedente</button>
+                          <button onClick={() => subsanar(c)}>Subsanar</button>
+                        </>}
                       </div>
                     </td>
                   </tr>
@@ -113,15 +160,15 @@ export default function Transcripcion() {
             </table>
           </div>
         ) : casos && (
-          <Vacio icono={Stamp} titulo="Nada por transcribir">
-            Los casos llegan aquí cuando quedan verificados. Los plazos por entidad se calculan solos.
+          <Vacio icono={Stamp} titulo="Nada por transcribir ni radicar">
+            Los casos llegan aquí cuando quedan verificados. Los plazos de cada entidad se calculan solos.
           </Vacio>
         )}
       </Panel>
 
       <Panel
         titulo="Reporte de ausentismo al SG-SST"
-        sub="Resumen mensual de incapacidades, días perdidos e índices."
+        sub="Se envía en los primeros 3 días de cada mes. Cuenta solo los días que caen dentro del periodo."
         extra={
           <div className="en-linea">
             <input type="month" aria-label="Periodo" style={{ width: 170 }} value={periodo} onChange={(e) => setPeriodo(e.target.value)} />
@@ -131,32 +178,47 @@ export default function Transcripcion() {
           </div>
         }
       >
-        {sgsst ? (
+        {sgsst ? <>
           <div className="regla-hitos cuatro">
             {[
-              ['Incapacidades', sgsst.resumen.total_incapacidades, 'Eventos del periodo'],
-              ['Días perdidos', sgsst.resumen.dias_perdidos, 'Suma de días'],
-              ['Índice de frecuencia', sgsst.resumen.indice_frecuencia, 'Eventos por periodo'],
-              ['Índice de severidad', sgsst.resumen.indice_severidad, 'Días perdidos por periodo'],
+              ['Incapacidades', sgsst.resumen.total_incapacidades, 'Casos con días en el periodo'],
+              ['Colaboradores', sgsst.resumen.colaboradores_afectados, 'Personas afectadas'],
+              ['Días perdidos', sgsst.resumen.dias_perdidos, 'Días de ausencia en el periodo'],
+              ['Promedio', sgsst.resumen.promedio_dias, 'Días por incapacidad'],
             ].map(([t, n, q]) => (
               <div key={t}><div className="dia">{t}</div><div className={`n ${n ? '' : 'cero'}`}>{n}</div><div className="que">{q}</div></div>
             ))}
           </div>
-        ) : (
-          <p className="texto-tenue">Elija el periodo y genere el reporte.</p>
-        )}
+          {sgsst.registros.length > 0 && (
+            <div className="sub-tabla tabla-wrap">
+              <table>
+                <thead><tr><th>Caso</th><th>Colaborador</th><th>Área</th><th>Tipo</th><th>Origen</th><th>CIE-10</th><th className="num">Días</th></tr></thead>
+                <tbody>
+                  {sgsst.registros.map((r) => (
+                    <tr key={r.numero_caso}>
+                      <td className="caso">{r.numero_caso}</td><td>{r.colaborador}</td><td>{r.area}</td>
+                      <td>{TIPOS[r.tipo] || r.tipo}</td><td>{r.origen === 'LABORAL' ? 'Laboral' : 'Común'}</td>
+                      <td>{r.diagnostico_agrupado}</td><td className="num">{r.dias}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </> : <p className="texto-tenue">Elija el periodo y genere el reporte.</p>}
 
         <PanelIA
-          titulo="Análisis de ausentismo"
-          descripcion="Hallazgos, patrones y recomendaciones para el SG-SST. Los diagnósticos se envían agrupados y sin nombres."
+          titulo="Análisis de ausentismo con IA"
+          descripcion="Hallazgos, áreas críticas y recomendaciones para el SG-SST. A la IA se envían solo datos agrupados, sin nombres."
           accion="Analizar con IA"
           cargando={cargando === 'ia'}
           onEjecutar={() => reporteSGSST(true)}
         >
-          {ia && <>
-            <p>{ia.resumen_ejecutivo}</p>
-            {ia.hallazgos?.length > 0 && <><h4>Hallazgos</h4><ul>{ia.hallazgos.map((h, i) => <li key={i}>{h}</li>)}</ul></>}
-            {ia.recomendaciones_sgsst?.length > 0 && <><h4>Recomendaciones</h4><ul>{ia.recomendaciones_sgsst.map((h, i) => <li key={i}>{h}</li>)}</ul></>}
+          {iaRes && <>
+            <p>{iaRes.resumen_ejecutivo}</p>
+            {iaRes.hallazgos?.length > 0 && <><h4>Hallazgos</h4><ul>{iaRes.hallazgos.map((h, i) => <li key={i}>{h}</li>)}</ul></>}
+            {iaRes.areas_criticas?.length > 0 && <><h4>Áreas críticas</h4><ul>{iaRes.areas_criticas.map((h, i) => <li key={i}>{h}</li>)}</ul></>}
+            {iaRes.recomendaciones_sgsst?.length > 0 && <><h4>Recomendaciones</h4><ul>{iaRes.recomendaciones_sgsst.map((h, i) => <li key={i}>{h}</li>)}</ul></>}
           </>}
         </PanelIA>
       </Panel>

@@ -1,27 +1,58 @@
-// Vista Reporte y recepción (CU-01 a CU-06)
-import { useEffect, useState } from 'react';
-import { FolderOpen } from 'lucide-react';
-import { api, sesion } from '../api.js';
-import { Aviso, Encabezado, Estado, Panel, PanelIA, TIPOS, Vacio, fecha, tipo, useDialogo } from '../ui.jsx';
+// Vista Reporte y recepción
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight, FileText, FolderOpen, Sparkles, Upload } from 'lucide-react';
+import { api, abrirDocumento, formulario, sesion } from '../api.js';
+import {
+  ARCHIVOS_ACEPTADOS, Aviso, DOCUMENTOS, Encabezado, Estado, Panel, TIPOS, Vacio,
+  documento, documentosRequeridos, fecha, tipo, useDialogo, useIA,
+} from '../ui.jsx';
 
-const DOCUMENTOS = [
-  ['CERTIFICADO', 'Certificado'], ['EPICRISIS', 'Epicrisis'], ['FURIPS', 'FURIPS'],
-  ['NACIDO_VIVO', 'Certificado nacido vivo'], ['REGISTRO_CIVIL', 'Registro civil'], ['DOC_IDENTIDAD', 'Documento de identidad'],
+const CANALES = [
+  ['PRESENCIAL', 'Recepción (presencial)'], ['GESTION_HUMANA', 'Directo en Gestión Humana'],
+  ['OFICINA_PRINCIPAL', 'Oficina principal'], ['LIDER_COMERCIAL', 'Líder comercial'], ['CORREO_ELECTRONICO', 'Correo electrónico'],
 ];
+const ABIERTOS_A_SOPORTES = ['REPORTADA', 'DOCUMENTACION_REMITIDA', 'RECIBIDA', 'DOCUMENTACION_INCOMPLETA'];
+const CERRADOS = ['ARCHIVADA', 'DADA_DE_BAJA'];
+const FORM_INICIAL = { colaborador_id: '', tipo: 'ENFERMEDAD_GENERAL', fecha_inicio: '', dias: 1, entidad_id: '', diagnostico_cie10: '', observaciones: '' };
 
 export default function Recepcion() {
-  const rol = sesion()?.usuario?.rol;
+  const usuario = sesion()?.usuario;
+  const rol = usuario?.rol;
+  const esColaborador = rol === 'COLABORADOR';
+  const gestiona = ['AUXILIAR', 'RECEPCIONISTA', 'ADMIN'].includes(rol);
   const dlg = useDialogo();
+  const iaActiva = useIA();
+
   const [casos, setCasos] = useState(null);
   const [entidades, setEntidades] = useState([]);
-  const [form, setForm] = useState({ tipo: 'ENFERMEDAD_GENERAL', fecha_inicio: '', dias: 1, entidad_id: '', observaciones: '' });
+  const [colaboradores, setColaboradores] = useState([]);
+  const [form, setForm] = useState(FORM_INICIAL);
   const [msj, setMsj] = useState(null);
-  const [ocr, setOcr] = useState(null);
-  const [textoCert, setTextoCert] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [lectura, setLectura] = useState(null); // resultado de la IA
+  const [certificado, setCertificado] = useState(null); // archivo leído por la IA, se adjunta al crear el caso
+  const [abierto, setAbierto] = useState(null);
+  const [verCerrados, setVerCerrados] = useState(false);
 
   const cargar = () => api('/incapacidades').then(setCasos).catch((e) => { setCasos([]); setMsj({ t: 'error', m: e.message }); });
-  useEffect(() => { cargar(); api('/entidades').then(setEntidades).catch(() => {}); }, []);
+  useEffect(() => {
+    cargar();
+    api('/entidades').then(setEntidades).catch(() => {});
+    api('/colaboradores').then((c) => {
+      setColaboradores(c);
+      if (c.length === 1) setForm((f) => ({ ...f, colaborador_id: c[0].id, entidad_id: c[0].eps?.id || f.entidad_id }));
+    }).catch(() => {});
+  }, []);
+
+  const requeridos = documentosRequeridos(form.tipo, form.dias);
+  const visibles = useMemo(() => (casos || []).filter((c) => verCerrados || !CERRADOS.includes(c.estado)), [casos, verCerrados]);
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  function elegirColaborador(id) {
+    const c = colaboradores.find((x) => x.id === id);
+    // La EPS del colaborador se propone como entidad; el usuario puede cambiarla (p. ej. ARL en accidente laboral)
+    setForm((f) => ({ ...f, colaborador_id: id, entidad_id: c?.eps?.id || f.entidad_id }));
+  }
 
   async function informar(e, confirmarNoProrroga = false, prorrogaDe = null) {
     e?.preventDefault();
@@ -30,17 +61,25 @@ export default function Recepcion() {
     try {
       const r = await api('/incapacidades', {
         method: 'POST',
-        body: { ...form, dias: Number(form.dias), confirmar_no_prorroga: confirmarNoProrroga, prorroga_de: prorrogaDe },
+        body: { ...form, dias: Number(form.dias), entidad_id: Number(form.entidad_id), confirmar_no_prorroga: confirmarNoProrroga, prorroga_de: prorrogaDe },
       });
-      setMsj({ t: 'ok', m: `${r.mensaje} Documentos requeridos: ${r.documentos_requeridos.join(', ')}.` });
+      let extra = '';
+      if (certificado) {
+        try {
+          await api(`/incapacidades/${r.caso.id}/documentos`, { method: 'POST', formData: formulario({}, { CERTIFICADO: certificado }) });
+          extra = ' El certificado leído quedó adjunto al caso.';
+        } catch (err) { extra = ` No se pudo adjuntar el certificado: ${err.message}`; }
+      }
+      setMsj({ t: 'ok', m: `${r.mensaje} Soportes requeridos: ${r.documentos_requeridos.map(documento).join(', ')}.${extra}` });
+      setForm((f) => ({ ...FORM_INICIAL, colaborador_id: colaboradores.length === 1 ? f.colaborador_id : '', entidad_id: colaboradores.length === 1 ? f.entidad_id : '' }));
+      setLectura(null);
+      setCertificado(null);
       cargar();
     } catch (err) {
       if (err.status === 409 && err.datos?.caso_existente_id) {
-        const esProrroga = await dlg.confirmar(
-          '¿Es una prórroga?',
-          `${err.message}\nCaso existente: ${err.datos.caso_existente}.\n\nConfirme para registrarla como prórroga de ese caso, o cancele para registrarla como un caso nuevo.`,
-          { textoAceptar: 'Registrar como prórroga' }
-        );
+        const esProrroga = await dlg.confirmar('¿Es una prórroga?',
+          `${err.message}\n\nSi es una prórroga se vincula a ese caso y sus días se suman para los hitos de 90, 120, 150 y 180 días.`,
+          { textoAceptar: 'Sí, es prórroga' });
         return informar(null, !esProrroga, esProrroga ? err.datos.caso_existente_id : null);
       }
       setMsj({ t: 'error', m: err.message });
@@ -49,66 +88,156 @@ export default function Recepcion() {
     }
   }
 
-  async function remitirDocs(caso) {
-    const r0 = await dlg.pedir({
-      titulo: `Remitir soportes · ${caso.numero_caso}`,
-      descripcion: 'Marque los documentos que entrega el colaborador.',
-      textoAceptar: 'Remitir',
-      campos: [{ nombre: 'tipos', etiqueta: 'Documentos', tipo: 'multi', opciones: DOCUMENTOS, valor: ['CERTIFICADO'] }],
-    });
-    if (!r0?.tipos?.length) return;
-    const fd = new FormData();
-    r0.tipos.forEach((t) => fd.append('tipos_documento', t));
-    fd.append('canal_entrega', 'PRESENCIAL');
+  async function leerCertificado(e) {
+    const archivo = e.target.files?.[0];
+    e.target.value = '';
+    if (!archivo) return;
+    setLectura({ cargando: true, nombre: archivo.name });
     try {
-      const r = await api(`/incapacidades/${caso.id}/documentos`, { method: 'POST', formData: fd });
-      setMsj({ t: r.extemporanea ? 'info' : 'ok', m: `${r.mensaje}${r.extemporanea ? ' Remisión extemporánea.' : ''} Faltantes: ${r.faltantes.join(', ') || 'ninguno'}.` });
+      const d = await api('/ia/leer-certificado', { method: 'POST', formData: formulario({}, { archivo }) });
+      setLectura(d);
+      if (d.legible !== false) {
+        setCertificado(archivo);
+        setForm((f) => ({
+          ...f,
+          tipo: d.tipo_novedad || f.tipo,
+          fecha_inicio: d.fecha_inicio || f.fecha_inicio,
+          dias: d.dias || f.dias,
+          entidad_id: d.entidad_id || f.entidad_id,
+          diagnostico_cie10: d.diagnostico_cie10 || f.diagnostico_cie10,
+          colaborador_id: !esColaborador && d.colaborador_sugerido ? d.colaborador_sugerido.id : f.colaborador_id,
+        }));
+      }
+    } catch (err) {
+      setLectura(null);
+      setMsj({ t: 'error', m: err.message });
+    }
+  }
+
+  async function remitir(caso) {
+    const req = documentosRequeridos(caso.tipo, caso.dias);
+    const tipos = [...req, ...Object.keys(DOCUMENTOS).filter((d) => !req.includes(d))];
+    const r0 = await dlg.pedir({
+      titulo: `Adjuntar soportes · ${caso.numero_caso}`,
+      descripcion: `Exigidos para ${tipo(caso.tipo).toLowerCase()}: ${req.map(documento).join(', ')}.\nAdjunte el PDF o la foto de cada uno. Los originales se entregan en físico.`,
+      textoAceptar: 'Enviar soportes',
+      campos: tipos.map((t) => ({ nombre: t, etiqueta: documento(t), tipo: 'file', requerido: false })),
+    });
+    if (!r0) return;
+    const archivos = Object.fromEntries(Object.entries(r0).filter(([, f]) => f));
+    if (!Object.keys(archivos).length) return setMsj({ t: 'error', m: 'No adjuntó ningún archivo.' });
+    try {
+      const r = await api(`/incapacidades/${caso.id}/documentos`, { method: 'POST', formData: formulario({}, archivos) });
+      setMsj({
+        t: r.faltantes.length || r.extemporanea ? 'info' : 'ok',
+        m: `${r.mensaje}${r.extemporanea ? ' La entrega quedó marcada como extemporánea.' : ''}` +
+          (r.faltantes.length ? ` Aún faltan: ${r.faltantes.map(documento).join(', ')}.` : ''),
+      });
       cargar();
     } catch (e) { setMsj({ t: 'error', m: e.message }); }
   }
 
   async function recibir(caso) {
+    const cargados = new Set(caso.documentos.map((d) => d.tipo_documento));
+    const r0 = await dlg.pedir({
+      titulo: `Registrar recepción · ${caso.numero_caso}`,
+      descripcion: `${caso.colaborador?.usuario?.nombre} · ${tipo(caso.tipo)}. Marque los documentos físicos que entrega.`,
+      textoAceptar: 'Registrar recepción',
+      campos: [
+        { nombre: 'canal', etiqueta: 'Canal de entrega', tipo: 'select', opciones: CANALES, vacio: false, requerido: true,
+          valor: rol === 'RECEPCIONISTA' ? 'PRESENCIAL' : 'GESTION_HUMANA' },
+        { nombre: 'fisicos', etiqueta: 'Documentos recibidos en físico', tipo: 'multi',
+          opciones: Object.entries(DOCUMENTOS), valor: documentosRequeridos(caso.tipo, caso.dias).filter((d) => !cargados.has(d)).concat([...cargados]) },
+      ],
+    });
+    if (!r0) return;
     try {
-      const r = await api(`/incapacidades/${caso.id}/recibir`, { method: 'POST', body: {} });
-      setMsj({ t: 'ok', m: `Recibida. Comprobante ${r.comprobante.numero_caso} · ${r.comprobante.canal} · ${r.comprobante.receptor}.` });
+      const r = await api(`/incapacidades/${caso.id}/recibir`, { method: 'POST', body: { canal: r0.canal, documentos_fisicos: r0.fisicos } });
+      setMsj({ t: 'ok', m: `${r.mensaje} Recibió ${r.comprobante.receptor} el ${fecha(r.comprobante.fecha)}.` });
       cargar();
     } catch (e) { setMsj({ t: 'error', m: e.message }); }
   }
 
   async function reemplazo(caso) {
-    const justificacion = await dlg.pedirTexto(`Reemplazo · ${caso.numero_caso}`, 'Nombre del reemplazo o justificación',
-      'Reemplazo interno del área', { descripcion: 'Escriba "Sin reemplazo" si no hay personal disponible.', textoAceptar: 'Registrar' });
-    if (justificacion === null) return;
+    const opciones = colaboradores.filter((c) => c.id !== caso.colaborador_id).map((c) => [c.id, `${c.usuario?.nombre} · ${c.cargo || c.area || ''}`]);
+    const r0 = await dlg.pedir({
+      titulo: `Asignar reemplazo · ${caso.numero_caso}`,
+      descripcion: `${caso.colaborador?.usuario?.nombre} estará ausente del ${fecha(caso.fecha_inicio)} al ${fecha(caso.fecha_fin)}.`,
+      textoAceptar: 'Registrar',
+      campos: [
+        { nombre: 'reemplazo_id', etiqueta: 'Reemplazo', tipo: 'select', opciones, vacio: 'Sin reemplazo disponible' },
+        { nombre: 'fecha_inicio', etiqueta: 'Desde', tipo: 'date', valor: caso.fecha_inicio, requerido: true },
+        { nombre: 'fecha_fin', etiqueta: 'Hasta', tipo: 'date', valor: caso.fecha_fin, requerido: true },
+        { nombre: 'justificacion', etiqueta: 'Justificación', tipo: 'textarea', ayuda: 'Obligatoria si no hay reemplazo.' },
+      ],
+    });
+    if (!r0) return;
     try {
-      await api(`/incapacidades/${caso.id}/reemplazo`, { method: 'POST', body: { justificacion } });
-      setMsj({ t: 'ok', m: 'Reemplazo registrado y notificado.' });
+      const r = await api(`/incapacidades/${caso.id}/reemplazo`, { method: 'POST', body: { ...r0, reemplazo_id: r0.reemplazo_id || null } });
+      setMsj({ t: 'ok', m: r.mensaje });
     } catch (e) { setMsj({ t: 'error', m: e.message }); }
   }
 
-  async function extraerIA() {
-    if (!textoCert.trim()) return setMsj({ t: 'error', m: 'Pegue el texto del certificado para extraer los datos.' });
-    setOcr({ cargando: true });
-    try {
-      const datos = await api('/ia/extraer-certificado', { method: 'POST', body: { texto: textoCert } });
-      setOcr(datos);
-      if (datos.fecha_inicio) setForm((f) => ({ ...f, fecha_inicio: datos.fecha_inicio, dias: datos.dias || f.dias, tipo: datos.tipo_novedad || f.tipo }));
-    } catch (e) { setOcr(null); setMsj({ t: 'error', m: e.message }); }
+  async function ver(d) {
+    try { await abrirDocumento(d.id); } catch (e) { setMsj({ t: 'error', m: e.message }); }
   }
 
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-  const gestiona = ['AUXILIAR', 'RECEPCIONISTA', 'ADMIN'].includes(rol);
+  const puedeAdjuntar = (c) => ABIERTOS_A_SOPORTES.includes(c.estado) && (gestiona || c.colaborador?.usuario?.id === usuario?.id || rol === 'LIDER');
+  const incompletos = (casos || []).filter((c) => c.estado === 'DOCUMENTACION_INCOMPLETA');
 
   return (
     <div>
-      <Encabezado
-        titulo="Reporte y recepción"
-        descripcion="Informe una incapacidad, remita los soportes y registre su recepción."
-        refs={['CU-01', 'CU-06']}
-      />
+      <Encabezado titulo="Reporte y recepción"
+        descripcion={esColaborador ? 'Informe su incapacidad o licencia y adjunte los soportes.' : 'Registre incapacidades, adjunte soportes y deje constancia de su recepción.'} />
       <Aviso msj={msj} onCerrar={() => setMsj(null)} />
+      {esColaborador && incompletos.length > 0 && (
+        <Aviso msj={{ t: 'info', m: `Tiene ${incompletos.length} caso(s) con soportes pendientes. Adjúntelos desde la tabla de abajo.` }} />
+      )}
 
       <Panel titulo="Informar incapacidad" sub="Si las fechas se cruzan con un caso existente, el sistema le preguntará si es una prórroga.">
+        {iaActiva !== false && (
+          <div className="ia" style={{ marginTop: 0, marginBottom: 16 }}>
+            <div className="ia-cabeza">
+              <div className="ia-titulo"><Sparkles size={17} aria-hidden="true" />Llenar con el certificado</div>
+              <label className={`boton secundario ${lectura?.cargando || !iaActiva ? 'deshabilitado' : ''}`}>
+                <Upload size={15} aria-hidden="true" />{lectura?.cargando ? 'Leyendo…' : 'Subir certificado'}
+                <input type="file" accept={ARCHIVOS_ACEPTADOS} className="sr-only" onChange={leerCertificado} disabled={lectura?.cargando || !iaActiva} />
+              </label>
+            </div>
+            <p className="ia-nota">Suba el PDF o la foto del certificado: la IA de Google propone tipo, fechas, días, entidad y diagnóstico. Revise los datos antes de enviar.</p>
+            {lectura && !lectura.cargando && (
+              <div className="ia-cuerpo">
+                {lectura.legible === false
+                  ? <p className="texto-alerta">No se pudo leer como certificado: {lectura.observaciones}</p>
+                  : <>
+                      <div className="chips" style={{ marginTop: 0 }}>
+                        <span className={`chip ${lectura.confianza === 'ALTA' ? 'ok' : lectura.confianza === 'BAJA' ? 'mal' : ''}`}>Confianza {String(lectura.confianza || '').toLowerCase()}</span>
+                        {lectura.nombre_colaborador && <span className="chip">{lectura.nombre_colaborador}</span>}
+                        {lectura.documento && <span className="chip">C.C. {lectura.documento}</span>}
+                        {lectura.entidad && <span className="chip">{lectura.entidad}{lectura.entidad_id ? '' : ' (no registrada)'}</span>}
+                      </div>
+                      {lectura.campos_dudosos?.length > 0 && <p className="ayuda" style={{ marginTop: 8 }}>Revise a mano: {lectura.campos_dudosos.join(', ')}.</p>}
+                      {!esColaborador && lectura.documento && !lectura.colaborador_sugerido && <p className="ayuda" style={{ marginTop: 4 }}>El documento {lectura.documento} no corresponde a un colaborador registrado: selecciónelo a mano.</p>}
+                      {lectura.observaciones && <p className="ayuda" style={{ marginTop: 4 }}>{lectura.observaciones}</p>}
+                      <p className="ayuda" style={{ marginTop: 4 }}>El certificado se adjuntará al caso al enviarlo.</p>
+                    </>}
+              </div>
+            )}
+          </div>
+        )}
+
         <form onSubmit={informar} className="form-grid">
+          {!esColaborador && (
+            <div className="campo ancho">
+              <label htmlFor="f-col">Colaborador incapacitado</label>
+              <select id="f-col" value={form.colaborador_id} onChange={(e) => elegirColaborador(e.target.value)} required>
+                <option value="">Seleccione el colaborador…</option>
+                {colaboradores.map((c) => (
+                  <option key={c.id} value={c.id}>{c.usuario?.nombre} · C.C. {c.usuario?.documento} · {c.area || c.cargo || ''}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="campo">
             <label htmlFor="f-tipo">Tipo de novedad</label>
             <select id="f-tipo" value={form.tipo} onChange={set('tipo')}>
@@ -117,7 +246,7 @@ export default function Recepcion() {
           </div>
           <div className="campo">
             <label htmlFor="f-entidad">Entidad (EPS o ARL)</label>
-            <select id="f-entidad" value={form.entidad_id} onChange={(e) => setForm({ ...form, entidad_id: Number(e.target.value) })} required>
+            <select id="f-entidad" value={form.entidad_id} onChange={set('entidad_id')} required>
               <option value="">Seleccione…</option>
               {entidades.map((en) => <option key={en.id} value={en.id}>{en.nombre} · {en.tipo}</option>)}
             </select>
@@ -128,74 +257,102 @@ export default function Recepcion() {
           </div>
           <div className="campo">
             <label htmlFor="f-dias">Días de incapacidad</label>
-            <input id="f-dias" type="number" min="1" value={form.dias} onChange={set('dias')} required />
+            <input id="f-dias" type="number" min="1" step="1" value={form.dias} onChange={set('dias')} required />
+          </div>
+          <div className="campo">
+            <label htmlFor="f-dx">Diagnóstico CIE-10 <span className="texto-tenue">(opcional)</span></label>
+            <input id="f-dx" value={form.diagnostico_cie10} onChange={set('diagnostico_cie10')} placeholder="Ej. J06.9" maxLength={10} />
+          </div>
+          <div className="campo">
+            <label htmlFor="f-obs">Observaciones <span className="texto-tenue">(opcional)</span></label>
+            <input id="f-obs" value={form.observaciones} onChange={set('observaciones')} />
           </div>
           <div className="campo ancho">
-            <label htmlFor="f-obs">Observaciones</label>
-            <input id="f-obs" value={form.observaciones} onChange={set('observaciones')} placeholder="Opcional" />
+            <span className="etiqueta">Soportes que deberá entregar</span>
+            <div className="chips" style={{ marginTop: 0 }}>
+              {requeridos.map((d) => <span key={d} className="chip"><FileText size={13} aria-hidden="true" />{documento(d)}</span>)}
+            </div>
           </div>
           <div className="form-acciones ancho">
-            <button type="submit" disabled={enviando}>{enviando ? 'Informando…' : 'Informar incapacidad'}</button>
+            <button type="submit" disabled={enviando}>{enviando ? 'Registrando…' : 'Informar incapacidad'}</button>
           </div>
         </form>
-
-        {gestiona && (
-          <PanelIA
-            titulo="Extraer datos del certificado"
-            descripcion="Pegue el texto del certificado recibido por correo y la IA propondrá fechas, días y diagnóstico."
-            accion="Extraer con IA"
-            cargando={ocr?.cargando}
-            onEjecutar={extraerIA}
-          >
-            <textarea rows={3} aria-label="Texto del certificado" placeholder="Texto del certificado recibido por correo…"
-              value={textoCert} onChange={(e) => setTextoCert(e.target.value)} />
-            {ocr && !ocr.cargando && (
-              <div style={{ marginTop: 10 }}>
-                <div className="chips">
-                  <span className="chip">{tipo(ocr.tipo_novedad)}</span>
-                  <span className="chip">Inicio {fecha(ocr.fecha_inicio)}</span>
-                  <span className="chip">{ocr.dias} día(s)</span>
-                  <span className="chip">CIE-10 {ocr.diagnostico_cie10 || '—'}</span>
-                  <span className="chip">{ocr.entidad || 'Entidad sin identificar'}</span>
-                  <span className={`chip ${ocr.confianza === 'ALTA' ? 'ok' : ocr.confianza === 'BAJA' ? 'mal' : ''}`}>Confianza {ocr.confianza?.toLowerCase()}</span>
-                </div>
-                {ocr.campos_dudosos?.length > 0 && <p className="ayuda" style={{ marginTop: 8 }}>Revisar manualmente: {ocr.campos_dudosos.join(', ')}</p>}
-              </div>
-            )}
-          </PanelIA>
-        )}
       </Panel>
 
-      <Panel titulo={rol === 'COLABORADOR' ? 'Mis incapacidades' : 'Casos abiertos'} sub={casos ? `${casos.length} caso(s)` : 'Cargando…'} cuerpo={false}>
-        {casos?.length ? (
+      <Panel
+        titulo={esColaborador ? 'Mis incapacidades' : rol === 'LIDER' ? 'Incapacidades de mi equipo' : 'Incapacidades'}
+        sub={casos ? `${visibles.length} caso(s)${verCerrados ? '' : ' abiertos'}` : 'Cargando…'}
+        extra={<label className="opcion-check" style={{ minHeight: 30 }}>
+          <input type="checkbox" checked={verCerrados} onChange={(e) => setVerCerrados(e.target.checked)} />Incluir archivados
+        </label>}
+        cuerpo={false}
+      >
+        {visibles.length ? (
           <div className="tabla-wrap">
             <table>
-              <thead><tr><th>Caso</th><th>Tipo</th><th>Inicio</th><th className="num">Días</th><th>Entidad</th><th>Estado</th><th className="th-acciones">Acciones</th></tr></thead>
+              <thead><tr><th style={{ width: 28 }} /><th>Caso</th><th>Tipo</th><th>Inicio</th><th className="num">Días</th><th>Entidad</th><th>Estado</th><th className="th-acciones">Acciones</th></tr></thead>
               <tbody>
-                {casos.map((c) => (
-                  <tr key={c.id}>
-                    <td><span className="caso">{c.numero_caso}</span><span className="secundario-texto">{c.colaborador?.usuario?.nombre}</span></td>
-                    <td>{tipo(c.tipo)}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{fecha(c.fecha_inicio)}</td>
-                    <td className="num">{c.dias}</td>
-                    <td>{c.entidad?.nombre}</td>
-                    <td><Estado valor={c.estado} /></td>
-                    <td>
-                      <div className="acciones">
-                        {c.estado === 'REPORTADA' && <button onClick={() => remitirDocs(c)}>Remitir soportes</button>}
-                        {rol === 'LIDER' && <button className="secundario" onClick={() => reemplazo(c)}>Reemplazo</button>}
-                        {['DOCUMENTACION_REMITIDA', 'REPORTADA'].includes(c.estado) && gestiona &&
-                          <button className="secundario" onClick={() => recibir(c)}>Recibir</button>}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {visibles.map((c) => {
+                  const exp = abierto === c.id;
+                  const faltantes = documentosRequeridos(c.tipo, c.dias).filter((d) =>
+                    !c.documentos.some((x) => x.tipo_documento === d && x.estado !== 'NO_CONFORME'));
+                  return (
+                    <Fragment key={c.id}>
+                      <tr className={c.estado === 'DOCUMENTACION_INCOMPLETA' ? 'fila-alerta' : ''}>
+                        <td>
+                          <button className="fantasma" style={{ padding: 0, width: 26, minHeight: 26 }} onClick={() => setAbierto(exp ? null : c.id)}
+                            aria-expanded={exp} aria-label={`Ver detalle de ${c.numero_caso}`}>
+                            {exp ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </button>
+                        </td>
+                        <td><span className="caso">{c.numero_caso}</span><span className="secundario-texto">{c.colaborador?.usuario?.nombre}</span></td>
+                        <td>{tipo(c.tipo)}{c.prorroga_de && <span className="secundario-texto">Prórroga</span>}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>{fecha(c.fecha_inicio)}</td>
+                        <td className="num">{c.dias}</td>
+                        <td>{c.entidad?.nombre}</td>
+                        <td><Estado valor={c.estado} />{c.extemporanea && <span className="secundario-texto texto-alerta">Extemporánea</span>}</td>
+                        <td>
+                          <div className="acciones">
+                            {rol === 'LIDER' && !CERRADOS.includes(c.estado) && <button className="secundario" onClick={() => reemplazo(c)}>Reemplazo</button>}
+                            {gestiona && ['REPORTADA', 'DOCUMENTACION_REMITIDA'].includes(c.estado) && <button className="secundario" onClick={() => recibir(c)}>Registrar recepción</button>}
+                            {puedeAdjuntar(c) && <button onClick={() => remitir(c)}>Adjuntar soportes</button>}
+                          </div>
+                        </td>
+                      </tr>
+                      {exp && (
+                        <tr>
+                          <td />
+                          <td colSpan={7} style={{ background: 'var(--superficie-2)' }}>
+                            <div className="exp-meta" style={{ marginTop: 0 }}>
+                              <span>Del <b>{fecha(c.fecha_inicio)}</b> al <b>{fecha(c.fecha_fin)}</b></span>
+                              {c.diagnostico_cie10 && <span>CIE-10 <b>{c.diagnostico_cie10}</b></span>}
+                              {c.observaciones && <span>{c.observaciones}</span>}
+                            </div>
+                            <div className="chips">
+                              {c.documentos.length ? c.documentos.map((d) => (
+                                <button key={d.id} type="button" className={`chip ${['CONFORME', 'ARCHIVADO_DIGITAL', 'TRANSFERIDO'].includes(d.estado) ? 'ok' : d.estado === 'NO_CONFORME' ? 'mal' : ''}`}
+                                  onClick={() => d.url && ver(d)} disabled={!d.url} title={d.url ? 'Abrir archivo' : 'Entregado solo en físico'}
+                                  style={{ cursor: d.url ? 'pointer' : 'default' }}>
+                                  <FileText size={13} aria-hidden="true" />{documento(d.tipo_documento)}
+                                  {d.estado === 'NO_CONFORME' && ' · no conforme'}{!d.url && ' · físico'}
+                                </button>
+                              )) : <span className="texto-tenue">Sin soportes cargados.</span>}
+                            </div>
+                            {faltantes.length > 0 && !CERRADOS.includes(c.estado) && (
+                              <p className="ayuda" style={{ marginTop: 8 }}>Pendientes: {faltantes.map(documento).join(', ')}.</p>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         ) : casos && (
-          <Vacio icono={FolderOpen} titulo="Aún no hay casos">
-            Cuando se informe una incapacidad con el formulario de arriba, aparecerá aquí con su número de caso.
+          <Vacio icono={FolderOpen} titulo={casos.length ? 'No hay casos abiertos' : 'Aún no hay casos'}>
+            {casos.length ? 'Active "Incluir archivados" para ver el historial.' : 'Cuando se informe una incapacidad con el formulario de arriba, aparecerá aquí con su número de caso.'}
           </Vacio>
         )}
       </Panel>

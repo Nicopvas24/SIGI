@@ -15,7 +15,9 @@ export default function Login() {
   const nav = useNavigate();
   const [correo, setCorreo] = useState('auxiliar@sigi.demo');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(
+    new URLSearchParams(location.search).has('vencida') ? 'Su sesión venció. Ingrese de nuevo.' : null
+  );
   const [enviando, setEnviando] = useState(false);
 
   async function entrar(e) {
@@ -25,7 +27,7 @@ export default function Login() {
     try {
       const r = await api('/auth/login', { method: 'POST', body: { correo, password } });
       guardarSesion(r);
-      nav('/');
+      nav('/', { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -66,7 +68,7 @@ export default function Login() {
           <div className="campo">
             <label htmlFor="clave">Contraseña</label>
             <input id="clave" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-            <span className="ayuda">En modo demo se deja vacía.</span>
+            <span className="ayuda">Usuarios de demostración: contraseña Sigi2026!</span>
           </div>
           {error && <Aviso msj={{ t: 'error', m: error }} />}
           <button type="submit" className="grande" disabled={enviando}>{enviando ? 'Ingresando…' : 'Ingresar'}</button>

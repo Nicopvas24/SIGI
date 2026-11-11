@@ -45,14 +45,46 @@ export async function listarIncapacidades(filtros = {}) {
   if (filtros.estado) {
     q = Array.isArray(filtros.estado) ? q.in('estado', filtros.estado) : q.eq('estado', filtros.estado);
   }
-  if (filtros.colaborador_id) q = q.eq('colaborador_id', filtros.colaborador_id);
+  if (filtros.colaborador_id) {
+    q = Array.isArray(filtros.colaborador_id)
+      ? q.in('colaborador_id', filtros.colaborador_id)
+      : q.eq('colaborador_id', filtros.colaborador_id);
+  }
   if (filtros.entidad_id) q = q.eq('entidad_id', filtros.entidad_id);
   const { data, error } = await q.order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
   return data;
 }
 
-// Bitácora de auditoría (CU-15 paso 5)
+// ---------- Colaboradores ----------
+export const SELECT_COLABORADOR = `
+  id, cargo, area, ibc, lider_id, usuario_id,
+  usuario:usuarios!usuario_id(id, nombre, documento, correo, rol),
+  eps:entidades!entidad_eps_id(id, nombre),
+  arl:entidades!entidad_arl_id(id, nombre)
+`;
+
+export async function listarColaboradores({ liderId } = {}) {
+  let q = supabase.from('colaboradores').select(SELECT_COLABORADOR);
+  if (liderId) q = q.eq('lider_id', liderId);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return data.sort((a, b) => (a.usuario?.nombre || '').localeCompare(b.usuario?.nombre || ''));
+}
+
+export async function colaboradorPorId(id) {
+  const { data, error } = await supabase.from('colaboradores').select(SELECT_COLABORADOR).eq('id', id).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function colaboradorDeUsuario(usuarioId) {
+  const { data, error } = await supabase.from('colaboradores').select(SELECT_COLABORADOR).eq('usuario_id', usuarioId).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+// Bitácora de auditoría
 export async function registrarBitacora(usuarioId, accion, detalle = {}) {
   await supabase.from('bitacora').insert({ usuario_id: usuarioId || null, accion, detalle });
 }
