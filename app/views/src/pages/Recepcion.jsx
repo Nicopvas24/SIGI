@@ -1,7 +1,8 @@
 // Vista Reporte y recepción
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, FileText, FolderOpen, Sparkles, Upload } from 'lucide-react';
 import { api, abrirDocumento, formulario, sesion } from '../api.js';
+import BuscadorColaborador from '../components/BuscadorColaborador.jsx';
 import {
   ARCHIVOS_ACEPTADOS, Aviso, DOCUMENTOS, Encabezado, Estado, Panel, TIPOS, Vacio,
   documento, documentosRequeridos, fecha, tipo, useDialogo, useIA,
@@ -13,6 +14,7 @@ const CANALES = [
 ];
 const ABIERTOS_A_SOPORTES = ['REPORTADA', 'DOCUMENTACION_REMITIDA', 'RECIBIDA', 'DOCUMENTACION_INCOMPLETA'];
 const CERRADOS = ['ARCHIVADA', 'DADA_DE_BAJA'];
+const TERMINADOS = [...CERRADOS, 'PAGADA'];
 const FORM_INICIAL = { colaborador_id: '', tipo: 'ENFERMEDAD_GENERAL', fecha_inicio: '', dias: 1, entidad_id: '', diagnostico_cie10: '', observaciones: '' };
 
 export default function Recepcion() {
@@ -33,6 +35,8 @@ export default function Recepcion() {
   const [certificado, setCertificado] = useState(null); // archivo leído por la IA, se adjunta al crear el caso
   const [abierto, setAbierto] = useState(null);
   const [verCerrados, setVerCerrados] = useState(false);
+  const [faltaColaborador, setFaltaColaborador] = useState(false);
+  const buscadorRef = useRef(null);
 
   const cargar = () => api('/incapacidades').then(setCasos).catch((e) => { setCasos([]); setMsj({ t: 'error', m: e.message }); });
   useEffect(() => {
@@ -48,14 +52,27 @@ export default function Recepcion() {
   const visibles = useMemo(() => (casos || []).filter((c) => verCerrados || !CERRADOS.includes(c.estado)), [casos, verCerrados]);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
+  // Casos sin terminar por colaborador, para avisar en el buscador (posible prórroga)
+  const casosAbiertos = useMemo(() => {
+    const m = {};
+    for (const c of casos || []) if (!TERMINADOS.includes(c.estado)) (m[c.colaborador_id] ||= []).push(c);
+    return m;
+  }, [casos]);
+
   function elegirColaborador(id) {
     const c = colaboradores.find((x) => x.id === id);
+    if (id) setFaltaColaborador(false);
     // La EPS del colaborador se propone como entidad; el usuario puede cambiarla (p. ej. ARL en accidente laboral)
     setForm((f) => ({ ...f, colaborador_id: id, entidad_id: c?.eps?.id || f.entidad_id }));
   }
 
   async function informar(e, confirmarNoProrroga = false, prorrogaDe = null) {
     e?.preventDefault();
+    if (!esColaborador && !form.colaborador_id) {
+      setFaltaColaborador(true);
+      buscadorRef.current?.focus();
+      return;
+    }
     setMsj(null);
     setEnviando(true);
     try {
@@ -204,7 +221,7 @@ export default function Recepcion() {
                 <input type="file" accept={ARCHIVOS_ACEPTADOS} className="sr-only" onChange={leerCertificado} disabled={lectura?.cargando || !iaActiva} />
               </label>
             </div>
-            <p className="ia-nota">Suba el PDF o la foto del certificado: la IA de Google propone tipo, fechas, días, entidad y diagnóstico. Revise los datos antes de enviar.</p>
+            <p className="ia-nota">Suba el PDF o la foto del certificado: la IA propone tipo, fechas, días, entidad y diagnóstico. Revise los datos antes de enviar.</p>
             {lectura && !lectura.cargando && (
               <div className="ia-cuerpo">
                 {lectura.legible === false
@@ -230,12 +247,18 @@ export default function Recepcion() {
           {!esColaborador && (
             <div className="campo ancho">
               <label htmlFor="f-col">Colaborador incapacitado</label>
-              <select id="f-col" value={form.colaborador_id} onChange={(e) => elegirColaborador(e.target.value)} required>
-                <option value="">Seleccione el colaborador…</option>
-                {colaboradores.map((c) => (
-                  <option key={c.id} value={c.id}>{c.usuario?.nombre} · C.C. {c.usuario?.documento} · {c.area || c.cargo || ''}</option>
-                ))}
-              </select>
+              <BuscadorColaborador
+                ref={buscadorRef}
+                id="f-col"
+                colaboradores={colaboradores}
+                valor={form.colaborador_id}
+                onCambiar={elegirColaborador}
+                casosAbiertos={casosAbiertos}
+                invalido={faltaColaborador}
+                requerido
+                onInvalido={() => setFaltaColaborador(true)}
+              />
+              {faltaColaborador && <span className="texto-alerta ayuda" role="alert">Busque y seleccione el colaborador que tiene la incapacidad.</span>}
             </div>
           )}
           <div className="campo">

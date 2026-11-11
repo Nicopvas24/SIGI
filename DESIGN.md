@@ -158,7 +158,7 @@ fila (`MiniRegla`) y como motivo en la pantalla de ingreso. No se reutiliza para
 
 Viven en `app/views/src/ui.jsx`:
 
-- `Encabezado`: título, descripción de una línea y referencias a casos de uso (CU-xx) a la derecha. Sin etiquetas encima del título.
+- `Encabezado`: título y descripción de una línea; a la derecha solo controles útiles (periodo, totales). Sin etiquetas encima del título ni referencias a casos de uso: esos códigos son de la documentación, no de la interfaz.
 - `Panel`: contenedor con cabecera; nunca paneles anidados. Los casos de una bandeja van como filas (`.expedientes`), no como tarjetas sueltas.
 - `Estado`: sello de estado del diagrama DE-01 con texto legible ("Docs. incompletos", no `DOCUMENTACION_INCOMPLETA`).
 - `Aviso`: resultado de una acción, con icono y botón de cerrar.

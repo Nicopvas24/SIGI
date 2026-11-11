@@ -226,7 +226,7 @@ export function PanelIA({ titulo, descripcion, accion, cargando, onEjecutar, chi
             </button>}
       </div>
       <p className="ia-nota">
-        {pendiente ? 'Se activará cuando el administrador configure la clave de Google Gemini (GEMINI_API_KEY).' : descripcion}
+        {pendiente ? 'Se activará cuando el administrador configure la IA (IA_PROVEEDOR en el archivo .env).' : descripcion}
       </p>
       {children && !pendiente && <div className="ia-cuerpo">{children}</div>}
     </div>

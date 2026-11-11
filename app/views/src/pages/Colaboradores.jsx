@@ -121,7 +121,7 @@ export default function Colaboradores() {
 
             {historial.casos.length > 0 && (
               <PanelIA titulo="Resumen del historial con IA"
-                descripcion="La IA de Google resume la situación del colaborador, detecta patrones y alerta sobre los hitos de 120, 150 y 180 días. El diagnóstico se envía solo como código agrupado."
+                descripcion="La IA resume la situación del colaborador, detecta patrones y alerta sobre los hitos de 120, 150 y 180 días. El diagnóstico se envía solo como código agrupado."
                 accion="Generar resumen" cargando={cargandoIA} onEjecutar={resumir}>
                 {resumen && <>
                   <p>{resumen.resumen}</p>
