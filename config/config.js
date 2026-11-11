@@ -10,12 +10,26 @@ export const config = {
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
     bucket: process.env.SUPABASE_BUCKET || 'documentos',
   },
-  // IA: Google Gemini (https://aistudio.google.com/apikey). Se activa al definir GEMINI_API_KEY.
-  ia: {
-    apiKey: process.env.GEMINI_API_KEY?.trim() || '',
-    habilitada: Boolean(process.env.GEMINI_API_KEY?.trim()),
-    model: process.env.GEMINI_MODEL?.trim() || 'gemini-flash-latest',
-  },
+  // IA. Dos proveedores:
+  //  - 'ovh': OVHcloud AI Endpoints, gratuito y SIN clave (límite ~2 solicitudes/min por IP y modelo).
+  //  - 'gemini': Google Gemini, requiere GEMINI_API_KEY (gratis en https://aistudio.google.com/apikey).
+  // IA_PROVEEDOR elige; si no se define, se usa Gemini cuando hay clave y si no la IA queda sin configurar.
+  ia: (() => {
+    const apiKey = process.env.GEMINI_API_KEY?.trim() || '';
+    const proveedor = process.env.IA_PROVEEDOR?.trim().toLowerCase() || (apiKey ? 'gemini' : '');
+    return {
+      proveedor,
+      habilitada: proveedor === 'ovh' || (proveedor === 'gemini' && Boolean(apiKey)),
+      apiKey,
+      model: process.env.GEMINI_MODEL?.trim() || 'gemini-flash-latest',
+      ovh: {
+        url: process.env.OVH_AI_URL?.trim() || 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1',
+        apiKey: process.env.OVH_AI_KEY?.trim() || '', // opcional: sube el límite de solicitudes
+        modelo: process.env.OVH_AI_MODELO?.trim() || 'Mistral-Small-3.2-24B-Instruct-2506',
+        modeloVision: process.env.OVH_AI_MODELO_VISION?.trim() || 'Qwen2.5-VL-72B-Instruct',
+      },
+    };
+  })(),
   // Plazos del procedimiento de Gestión Humana
   plazos: {
     remisionDocumentosDias: 2,       // RN-04: 2 días para remitir soportes

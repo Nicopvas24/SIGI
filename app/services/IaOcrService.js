@@ -1,6 +1,7 @@
-// IaOcrService - Módulo de IA para análisis de información con Google Gemini
-// (nota final del procedimiento: "Utilizar un modelo de inteligencia
-// artificial para análisis de información").
+// IaOcrService - Módulo de IA para análisis de información (nota final del
+// procedimiento: "Utilizar un modelo de inteligencia artificial para análisis
+// de información"). Proveedores: OVHcloud AI Endpoints (gratuito, sin clave)
+// o Google Gemini (con GEMINI_API_KEY). Ver config.ia.
 //
 // Capacidades:
 //  1. leerCertificado       - lee un certificado (PDF/imagen) y propone los datos del caso
@@ -11,14 +12,18 @@
 import { GoogleGenAI } from '@google/genai';
 import { config } from '../../config/config.js';
 
-let cliente = null;
-function obtenerCliente() {
+function exigirIA() {
   if (!config.ia.habilitada) {
     throw Object.assign(
-      new Error('El asistente de IA no está configurado. Defina GEMINI_API_KEY en el archivo .env.'),
+      new Error('El asistente de IA no está configurado. Defina IA_PROVEEDOR=ovh (gratuito) o GEMINI_API_KEY en el archivo .env.'),
       { status: 503, propio: true }
     );
   }
+}
+
+let cliente = null;
+function obtenerCliente() {
+  exigirIA();
   cliente ??= new GoogleGenAI({ apiKey: config.ia.apiKey });
   return cliente;
 }
@@ -30,10 +35,12 @@ const BASE_SISTEMA =
   'del código CIE-10. Responde únicamente con JSON válido que siga el esquema indicado.';
 
 /**
- * Llama a Gemini y devuelve el JSON de la respuesta.
+ * Llama al proveedor de IA configurado y devuelve el JSON de la respuesta.
  * `partes` es la lista de partes del mensaje: { text } o { inlineData: { mimeType, data } }.
  */
 async function pedirJSON(partes, instruccion = '') {
+  exigirIA();
+  if (config.ia.proveedor === 'ovh') return pedirJSONOvh(partes, instruccion);
   let response;
   try {
     response = await obtenerCliente().models.generateContent({
@@ -49,7 +56,11 @@ async function pedirJSON(partes, instruccion = '') {
     throw traducirError(e);
   }
 
-  const texto = (response.text || '').trim();
+  return parsearJSON(response.text);
+}
+
+function parsearJSON(bruto) {
+  const texto = String(bruto || '').trim();
   if (!texto) {
     throw Object.assign(new Error('La IA no devolvió contenido (posible bloqueo por políticas de seguridad).'), { status: 422 });
   }
@@ -79,6 +90,114 @@ function traducirError(e) {
   console.error('[IaOcrService]', e.message);
   return err;
 }
+
+// ---------- Proveedor gratuito: OVHcloud AI Endpoints (API compatible con OpenAI) ----------
+// Sin clave tiene un límite aproximado de 2 solicitudes por minuto por IP y por modelo; por eso
+// el texto y los documentos usan modelos distintos y ante un 429 se espera y se reintenta.
+const MAX_LADO_IMAGEN = 1600;
+const MAX_IMAGENES = 4;
+const MAX_TEXTO_PDF = 15000;
+const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function pedirJSONOvh(partes, instruccion) {
+  const contenido = [];
+  for (const p of partes) {
+    if (p.text) contenido.push({ type: 'text', text: p.text });
+    else if (p.inlineData) contenido.push(...(await archivoAContenido(p.inlineData)));
+  }
+  let imagenes = 0;
+  const final = contenido.filter((c) => c.type !== 'image_url' || ++imagenes <= MAX_IMAGENES);
+  if (imagenes > MAX_IMAGENES) final.push({ type: 'text', text: `(Se omitieron ${imagenes - MAX_IMAGENES} imagen(es) por el límite del modelo gratuito.)` });
+
+  const { modelo, modeloVision } = config.ia.ovh;
+  const datos = await llamarOvh({
+    model: imagenes ? modeloVision : modelo,
+    messages: [
+      { role: 'system', content: BASE_SISTEMA + (instruccion ? `\n${instruccion}` : '') },
+      { role: 'user', content: final },
+    ],
+    temperature: 0.2,
+    max_tokens: 4000,
+    response_format: { type: 'json_object' },
+  });
+  return parsearJSON(datos.choices?.[0]?.message?.content);
+}
+
+async function llamarOvh(body, intento = 1) {
+  const { url, apiKey } = config.ia.ovh;
+  let res;
+  try {
+    res = await fetch(`${url}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(120000),
+    });
+  } catch (e) {
+    console.error('[IaOcrService] OVH:', e.message);
+    throw Object.assign(new Error('No se pudo contactar el servicio gratuito de IA. Revise la conexión a internet.'), { status: 502 });
+  }
+  if (res.ok) return res.json();
+
+  const detalle = await res.text().catch(() => '');
+  // Límite de solicitudes: esperar lo que indique el servicio (máx. 65 s) y reintentar hasta 2 veces
+  if (res.status === 429 && intento <= 2) {
+    const segundos = Math.min(Number(res.headers.get('retry-after')) || 30, 65);
+    await espera(segundos * 1000);
+    return llamarOvh(body, intento + 1);
+  }
+  console.error('[IaOcrService] OVH', res.status, detalle.slice(0, 300));
+  const mensajes = {
+    400: 'El servicio gratuito de IA rechazó la solicitud (archivo demasiado grande o ilegible).',
+    401: 'La clave OVH_AI_KEY no es válida. Bórrela del .env para usar el acceso gratuito sin clave.',
+    413: 'Los documentos son demasiado grandes para el modelo gratuito.',
+    429: 'Se alcanzó el límite gratuito de la IA (unas 2 solicitudes por minuto). Intente de nuevo en un minuto.',
+  };
+  throw Object.assign(
+    new Error(mensajes[res.status] || `El servicio gratuito de IA no respondió (error ${res.status}). Intente de nuevo.`),
+    { status: res.status === 429 ? 429 : 502 }
+  );
+}
+
+/** Convierte un archivo en partes de mensaje: imágenes reducidas o texto extraído del PDF. */
+async function archivoAContenido({ mimeType, data }) {
+  const buffer = Buffer.from(data, 'base64');
+  if (mimeType !== 'application/pdf') return [imagenParte(await reducirImagen(buffer))];
+
+  const { extractText, getDocumentProxy, renderPageAsImage } = await import('unpdf');
+  let pdf;
+  try {
+    pdf = await getDocumentProxy(new Uint8Array(buffer));
+  } catch {
+    return [{ type: 'text', text: '(El PDF adjunto está dañado o protegido y no se pudo leer.)' }];
+  }
+  const { text, totalPages } = await extractText(pdf, { mergePages: true });
+  if (text.replace(/\s+/g, '').length >= 80) {
+    return [{ type: 'text', text: `Texto extraído del PDF (${totalPages} página(s)):\n${text.slice(0, MAX_TEXTO_PDF)}` }];
+  }
+  // PDF escaneado (sin capa de texto): se envían las primeras páginas como imagen
+  const paginas = [];
+  for (let n = 1; n <= Math.min(totalPages, 2); n++) {
+    const png = await renderPageAsImage(pdf, n, { canvasImport: () => import('@napi-rs/canvas'), scale: 1.6 });
+    paginas.push(imagenParte(await reducirImagen(Buffer.from(png))));
+  }
+  return paginas;
+}
+
+/** Reduce la imagen a MAX_LADO_IMAGEN px de lado y la codifica en JPEG para no exceder el contexto del modelo. */
+async function reducirImagen(buffer) {
+  const { createCanvas, loadImage } = await import('@napi-rs/canvas');
+  const img = await loadImage(buffer);
+  const factor = Math.min(1, MAX_LADO_IMAGEN / Math.max(img.width, img.height));
+  const canvas = createCanvas(Math.round(img.width * factor), Math.round(img.height * factor));
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.encode('jpeg', 85);
+}
+
+const imagenParte = (jpeg) => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${Buffer.from(jpeg).toString('base64')}` } });
 
 const texto = (t) => ({ text: t });
 const archivo = (mimeType, base64) => ({ inlineData: { mimeType, data: base64 } });

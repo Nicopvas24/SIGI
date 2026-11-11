@@ -284,7 +284,9 @@ export const RecepcionController = {
     const alcance = await alcanceColaboradores(req.usuario);
     if (datos.documento) {
       const todos = await listarColaboradores();
-      const c = todos.find((x) => normalizar(x.usuario?.documento) === normalizar(datos.documento));
+      // Solo dígitos: el certificado suele traer el tipo ("CC 1001234567")
+      const digitos = (t) => String(t || '').replace(/\D/g, '');
+      const c = digitos(datos.documento) && todos.find((x) => digitos(x.usuario?.documento) === digitos(datos.documento));
       if (c && (!alcance || alcance.includes(c.id))) colaborador = { id: c.id, nombre: c.usuario?.nombre };
     }
     res.json({ ...datos, entidad_id: ent?.id || null, colaborador_sugerido: colaborador });

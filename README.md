@@ -2,7 +2,7 @@
 
 Digitaliza el procedimiento de Gestión Humana para incapacidades de origen común y laboral y licencias de maternidad/paternidad: desde que el colaborador informa la novedad hasta que el pago se concilia y el expediente se archiva.
 
-**Stack:** React (vistas) · Node.js + Express (controladores, servicios) · Supabase / PostgreSQL (base de datos relacional, Auth y Storage) · Claude (IA para análisis de información).
+**Stack:** React (vistas) · Node.js + Express (controladores, servicios) · Supabase / PostgreSQL (base de datos relacional, Auth y Storage) · IA gratuita (OVHcloud AI Endpoints, sin clave) u opcionalmente Google Gemini.
 
 ## Estructura MVC (sección 12 de la Documentación de Análisis y Diseño)
 
@@ -37,7 +37,7 @@ sigi/
    ```
    El script aplica `database/migrations/*.sql` y `database/seeders/*.sql` (cada uno una sola vez, registrado en `_sigi_migraciones`), crea el bucket privado `documentos`, activa RLS en todas las tablas y escribe `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` en `.env`. El token no se guarda.
    *(Alternativa manual: ejecutar los `.sql` en orden en el SQL Editor y copiar `.env.example` a `.env`.)*
-2. `ANTHROPIC_API_KEY` es **opcional / pendiente**: sin ella todo el sistema funciona y solo los endpoints de IA responden `503`. `GET /api/salud` indica `"ia": "pendiente"` o `"activa"`. Dejar `DEMO_MODE=true` para probar sin configurar Supabase Auth.
+2. **IA:** `IA_PROVEEDOR=ovh` (valor por defecto en `.env.example`) usa modelos gratuitos de OVHcloud sin clave ni registro. Para usar Google Gemini: `IA_PROVEEDOR=gemini` y `GEMINI_API_KEY` (gratis en https://aistudio.google.com/apikey). Con `IA_PROVEEDOR` vacío el sistema funciona sin IA y esas funciones aparecen como "sin configurar". `GET /api/salud` indica `"ia": "activa"` o `"pendiente"`. Dejar `DEMO_MODE=true` para probar sin configurar Supabase Auth.
 4. Instalar y ejecutar:
 
 ```bash
@@ -70,16 +70,24 @@ Cada cambio de estado se valida contra el diagrama de estados **DE-01** (`app/mo
 
 ## Inteligencia artificial para análisis de información
 
-`app/services/IaOcrService.js` usa la API de Claude (modelo configurable con `ANTHROPIC_MODEL`) en cuatro puntos del proceso:
+`app/services/IaOcrService.js` admite dos proveedores (variable `IA_PROVEEDOR`):
+
+| Proveedor | Costo y acceso | Modelos | Límite |
+|---|---|---|---|
+| `ovh` · OVHcloud AI Endpoints | Gratuito, **sin clave** | Mistral Small 3.2 (texto) y Qwen2.5-VL 72B (documentos con imagen); configurables con `OVH_AI_MODELO` y `OVH_AI_MODELO_VISION` | ~2 solicitudes/min por IP y modelo; el servicio espera y reintenta solo. `OVH_AI_KEY` (opcional) sube el límite |
+| `gemini` · Google Gemini | Gratuito con `GEMINI_API_KEY` | `GEMINI_MODEL` (por defecto `gemini-flash-latest`) | Cuota gratuita de Google |
+
+Con OVHcloud, los PDF se envían como texto extraído (`unpdf`); si el PDF es escaneado, sus dos primeras páginas se convierten en imagen. Las fotos se reducen a 1600 px.
 
 | Función | Dónde se usa | Endpoint |
 |---|---|---|
-| Extraer datos del certificado (fechas, días, CIE-10, entidad, confianza) | CU-06 paso 4 | `POST /api/ia/extraer-certificado` |
-| Preverificar soportes y resaltar inconsistencias | CU-07 (sugerencia) | `GET /api/incapacidades/:id/preverificar-ia` |
-| Analizar el ausentismo mensual (hallazgos, patrones, recomendaciones) | CU-16 | `GET /api/sgsst/reporte?ia=true` |
-| Predecir qué casos podrían superar 180 días | CU-26 (sugerencia) | `GET /api/ia/prediccion-180` |
+| Leer un certificado (PDF o imagen) y proponer los datos del caso | Recepción (CU-06) | `POST /api/ia/leer-certificado` |
+| Analizar los soportes digitales de un caso (tipo, legibilidad, coherencia) | Verificación (CU-07) | `POST /api/ia/analizar-soportes/:id` |
+| Resumir el historial de incapacidades de un colaborador | Colaboradores | `POST /api/ia/resumen-colaborador/:id` |
+| Analizar el ausentismo mensual | SG-SST (CU-16) | `GET /api/sgsst/reporte?ia=true` |
+| Predecir qué casos podrían superar 180 días | Monitoreo (CU-26) | `POST /api/ia/prediccion-180` |
 
-Para proteger la reserva clínica, a la IA solo se envía el código CIE-10 agrupado (3 caracteres) y los registros de ausentismo van sin nombre del colaborador.
+Reserva clínica: las epicrisis no se envían a la IA, a los análisis solo va el código CIE-10 agrupado y los registros de ausentismo van sin nombre. Los certificados y soportes sí contienen datos personales: antes de usar datos reales, revisen los términos del proveedor elegido (Ley 1581 de 2012, datos de salud = datos sensibles).
 
 ## Reglas de negocio clave (`ReglasIncapacidadService`)
 
