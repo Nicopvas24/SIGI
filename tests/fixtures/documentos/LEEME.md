@@ -5,6 +5,25 @@ colaboradores sembrados en la base (mismo nombre y documento), así la IA puede 
 Contraseña de todos los usuarios: `Sigi2026!`. Para regenerarlos: `python tests/fixtures/generar_documentos.py tests/fixtures/documentos`
 (requiere `pip install reportlab pillow`).
 
+## Generar documentos para un colaborador específico
+
+```bash
+cd tests/fixtures
+python generar_documentos.py documentos --documento 1009
+python generar_documentos.py documentos --documento 1010 --tipo ACCIDENTE_TRANSITO --inicio 2026-11-20 --dias 12
+python generar_documentos.py documentos --documento 1012 --tipo LICENCIA_PATERNIDAD
+python generar_documentos.py documentos --documento 1001 --inicio 2026-11-16 --dias 10 --prorroga-de ST-2026-458812 --acumulados 5
+python generar_documentos.py documentos --nombre "Ana Pérez" --documento 43123456 --entidad "Nueva EPS" --ibc 1800000
+python generar_documentos.py --help
+```
+
+Crea la carpeta `<documento>_<tipo>_<fecha>` con los soportes que exige ese tipo de novedad y los PDF de
+gestión (transcripción, radicado, solicitud de pago y soporte de liquidación con el valor calculado como en SIGI).
+Al terminar imprime los datos que debe escribir en el formulario.
+Con los documentos 1001 a 1012 (colaboradores de prueba) toma el nombre, la EPS y el IBC solos; para otro
+colaborador indique `--nombre`, `--entidad` e `--ibc`, y créelo antes en SIGI con el mismo documento.
+Tipos: `ENFERMEDAD_GENERAL` (por defecto), `ACCIDENTE_LABORAL`, `ACCIDENTE_TRANSITO`, `LICENCIA_MATERNIDAD`, `LICENCIA_PATERNIDAD`.
+
 | Carpeta | Colaborador (usuario) | Datos para el formulario |
 |---|---|---|
 | `01_enfermedad_general_carlos` | Carlos Colaborador · `colaborador@sigi.demo` | Enfermedad general · Salud Total · 2026-11-10 · 5 días |
