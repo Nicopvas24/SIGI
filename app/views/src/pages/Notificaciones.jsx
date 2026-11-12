@@ -31,7 +31,7 @@ export default function Notificaciones() {
 
   return (
     <div>
-      <Encabezado titulo="Notificaciones" descripcion="Avisos del trámite de sus incapacidades y de las tareas a su cargo." />
+      <Encabezado titulo="Notificaciones" descripcion="Avisos sobre sus incapacidades y sus tareas pendientes." />
       <Aviso msj={msj} onCerrar={() => setMsj(null)} />
       <Panel titulo="Recientes" sub={lista ? `${sinLeer} sin leer` : 'Cargando…'} cuerpo={false}
         extra={sinLeer > 0 && <button className="secundario" onClick={todas}>Marcar todas como leídas</button>}>
@@ -53,7 +53,7 @@ export default function Notificaciones() {
             ))}
           </ul>
         ) : lista && (
-          <Vacio icono={Bell} titulo="Sin notificaciones">Aquí verá los avisos de soportes pendientes, plazos y cambios en sus casos.</Vacio>
+          <Vacio icono={Bell} titulo="Sin notificaciones">No tiene avisos nuevos.</Vacio>
         )}
       </Panel>
     </div>

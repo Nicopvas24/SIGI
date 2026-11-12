@@ -1,6 +1,6 @@
 // Buscador de colaborador (patrón combobox de ARIA 1.2).
-// Teclado: escribir filtra · ↓/↑ recorren · Inicio/Fin (con la lista abierta) van al primero/último ·
-// Enter selecciona · Esc cierra la lista o limpia la selección · Tab sale del campo.
+// Teclado: escribir filtra, flechas arriba/abajo recorren, Inicio/Fin van al primero o al último,
+// Enter selecciona, Esc cierra la lista o limpia la selección y Tab sale del campo.
 import { forwardRef, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Building2, CircleAlert, Search, ShieldCheck, X } from 'lucide-react';
 import { Estado } from '../ui.jsx';
@@ -188,7 +188,7 @@ const BuscadorColaborador = forwardRef(function BuscadorColaborador(
             );
           })}
           {!resultados.length && (
-            <li className="buscador-vacio" aria-hidden="true">Ningún colaborador coincide con «{consulta}».</li>
+            <li className="buscador-vacio" aria-hidden="true">Ningún colaborador coincide con "{consulta}".</li>
           )}
           {resultados.length === MAX_RESULTADOS && (
             <li className="buscador-vacio" aria-hidden="true">Se muestran los primeros {MAX_RESULTADOS}. Escriba más para afinar.</li>

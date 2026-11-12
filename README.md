@@ -1,17 +1,17 @@
 # SIGI – Sistema Integral de Gestión de Incapacidades
 
-Digitaliza el procedimiento de Gestión Humana para incapacidades de origen común y laboral y licencias de maternidad/paternidad: desde que el colaborador informa la novedad hasta que el pago se concilia y el expediente se archiva.
+Sistema para llevar el procedimiento de Gestión Humana de incapacidades de origen común y laboral y de licencias de maternidad y paternidad. Cubre el reporte del colaborador, la verificación de soportes, la transcripción ante la EPS o ARL, el cobro, la conciliación del pago y el archivo del expediente.
 
-**Stack:** React (vistas) · Node.js + Express (controladores, servicios) · Supabase / PostgreSQL (base de datos relacional, Auth y Storage) · IA gratuita (OVHcloud AI Endpoints, sin clave) u opcionalmente Google Gemini.
+**Tecnologías:** React para las vistas, Node.js con Express para la API, Supabase (PostgreSQL, Auth y Storage) para los datos y la IA de OVHcloud (gratuita) o Google Gemini para leer documentos.
 
-## Estructura MVC (sección 12 de la Documentación de Análisis y Diseño)
+## Estructura del proyecto (MVC)
 
 ```
 sigi/
 ├── app/
 │   ├── controllers/      # Uno por módulo: Auth, Recepcion, Verificacion, Transcripcion,
 │   │                     #   Cobro, Juridico, Conciliacion, Monitoreo, Archivo
-│   ├── models/           # Entidades del dominio (sección 7) y enumeraciones / transiciones DE-01
+│   ├── models/           # Entidades, estados y transiciones permitidas
 │   ├── services/         # ReglasIncapacidadService, NotificacionService, DocumentoService, IaOcrService
 │   ├── repositories/     # Persistencia sobre Supabase
 │   ├── middleware/       # Autenticación y permisos por rol
@@ -20,25 +20,25 @@ sigi/
 ├── config/               # Configuración (BD, plazos del procedimiento)
 ├── database/
 │   ├── migrations/       # 001_esquema_inicial.sql
-│   └── seeders/          # Entidades EPS/ARL (tabla 5.2.1) y usuarios demo
+│   └── seeders/          # EPS, ARL y usuarios de prueba
 ├── public/               # Punto de entrada: build de las vistas React
 ├── resources/plantillas/ # Requerimiento de cobro y derecho de petición
 ├── storage/              # documentos/ y logs/
-├── tests/unit/           # Pruebas de reglas de negocio (RN-06, documentos, DE-01)
+├── tests/unit/           # Pruebas de las reglas de negocio
 ├── docs/uml/
 └── server.js
 ```
 
 ## Puesta en marcha
 
-1. **Configurar Supabase automáticamente.** Crear un token personal en <https://supabase.com/dashboard/account/tokens> y ejecutar:
+1. Configurar Supabase. Crear un token personal en <https://supabase.com/dashboard/account/tokens> y ejecutar:
    ```bash
    SUPABASE_ACCESS_TOKEN=sbp_... npm run db:setup -- <project-ref>
    ```
    El script aplica `database/migrations/*.sql` y `database/seeders/*.sql` (cada uno una sola vez, registrado en `_sigi_migraciones`), crea el bucket privado `documentos`, activa RLS en todas las tablas y escribe `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` en `.env`. El token no se guarda.
    *(Alternativa manual: ejecutar los `.sql` en orden en el SQL Editor y copiar `.env.example` a `.env`.)*
-2. **IA:** `IA_PROVEEDOR=ovh` (valor por defecto en `.env.example`) usa modelos gratuitos de OVHcloud sin clave ni registro. Para usar Google Gemini: `IA_PROVEEDOR=gemini` y `GEMINI_API_KEY` (gratis en https://aistudio.google.com/apikey). Con `IA_PROVEEDOR` vacío el sistema funciona sin IA y esas funciones aparecen como "sin configurar". `GET /api/salud` indica `"ia": "activa"` o `"pendiente"`. Dejar `DEMO_MODE=true` para probar sin configurar Supabase Auth.
-4. Instalar y ejecutar:
+2. IA: `IA_PROVEEDOR=ovh` (valor por defecto en `.env.example`) usa modelos gratuitos de OVHcloud sin clave ni registro. Para usar Google Gemini: `IA_PROVEEDOR=gemini` y `GEMINI_API_KEY` (gratis en https://aistudio.google.com/apikey). Con `IA_PROVEEDOR` vacío el sistema funciona sin IA y esas funciones aparecen como "sin configurar". `GET /api/salud` indica `"ia": "activa"` o `"pendiente"`. Dejar `DEMO_MODE=true` para probar sin configurar Supabase Auth.
+3. Instalar y ejecutar:
 
 ```bash
 npm install
@@ -51,22 +51,23 @@ npm run dev                   # Interfaz en http://localhost:5173 (desarrollo)
 npm run build                 # Publica las vistas en public/ (Express las sirve en :4000)
 ```
 
-En modo demo se ingresa con cualquiera de los usuarios del seeder (`auxiliar@sigi.demo`, `colaborador@sigi.demo`, `juridica@sigi.demo`, …) sin contraseña. Para producción: `DEMO_MODE=false`, crear los usuarios en Supabase Auth y guardar su id en `usuarios.auth_id`.
+Los usuarios de prueba (`auxiliar@sigi.demo`, `colaborador@sigi.demo`, `juridica@sigi.demo`, `admin@sigi.demo`, etc.) entran con la contraseña `Sigi2026!`. Con `DEMO_MODE=true` el servidor no valida la contraseña; para producción se pone `DEMO_MODE=false`. Los usuarios nuevos se crean desde el menú **Usuarios** del administrador.
 
-## Casos de uso implementados
+## Módulos
 
-| Módulo | Casos de uso | Controlador |
+| Módulo | Qué hace | Controlador |
 |---|---|---|
-| Reporte y recepción | CU-01 informar (con detección de prórroga), CU-02 remitir soportes (extemporaneidad 2 días), CU-03 reemplazo (conflicto de fechas), CU-04/05/06 recibir (presencial / correo + IA/OCR) | `RecepcionController` |
-| Verificación documental | CU-07 verificar, CU-08 formato de seguimiento con liquidación RN-06 («include»), CU-09 faltantes con plazo de 3 días hábiles y segundo llamado («extend»), CU-10 archivo digital | `VerificacionController` |
-| Transcripción y radicación | CU-11/12/13 transcripción con plazos por entidad (tabla 5.2.1, prioritario ≤15 días, bloqueo si vence), CU-14 radicar + CU-15 evidencia obligatoria, CU-16 informe SG-SST | `TranscripcionController` |
-| Cobro | CU-31 aceptación y fecha promesa, CU-17 solicitud de pago, CU-18 seguimiento y tablero de cartera, CU-19 requerimientos persuasivos, CU-32 registro de pago | `CobroController` |
-| Cobro jurídico | CU-20 traslado y decisión, CU-22 derecho de petición (15 días hábiles), CU-23 tutela (solo si la petición fue negada o sin respuesta) | `JuridicoController` |
-| Conciliación | CU-24 consignaciones, cruce de coincidencias, pagos parciales, cierre de periodo; CU-25 registro en base de datos | `ConciliacionController` |
-| Monitoreo | CU-26 reporte 90/120/150/180 días acumulando prórrogas, CU-27 concepto de rehabilitación (hitos 120/150), CU-28 suspensión de pago por nómina | `MonitoreoController` |
-| Archivo | CU-29 archivar pagadas (exige soporte de liquidación, destruye epicrisis), CU-30 pagadas vs. físicas | `ArchivoController` |
+| Reporte y recepción | El colaborador o su líder informan la incapacidad (detecta prórrogas), se adjuntan los soportes y se registra su recepción. | `RecepcionController` |
+| Verificación | Revisión de soportes, formato de seguimiento con la liquidación y aviso de documentos faltantes (3 días hábiles). | `VerificacionController` |
+| Transcripción y radicación | Trámite ante cada entidad con su plazo, evidencia obligatoria y reporte mensual de ausentismo al SG-SST. | `TranscripcionController` |
+| Cobro | Respuesta de la entidad, solicitud de pago, seguimiento, requerimientos y registro del pago. | `CobroController` |
+| Cobro jurídico | Decisión de recuperar o dar de baja, derecho de petición (15 días hábiles) y tutela. | `JuridicoController` |
+| Conciliación | Cruce de las consignaciones de cada entidad con los casos cobrados y cierre del periodo. | `ConciliacionController` |
+| Monitoreo | Casos que pasan de 90, 120, 150 y 180 días sumando prórrogas, concepto de rehabilitación y suspensión de pago por nómina. | `MonitoreoController` |
+| Archivo | Soporte de liquidación, cruce con los expedientes físicos y transferencia a Gestión Documental. | `ArchivoController` |
+| Usuarios | Creación, edición, desactivación y eliminación de cuentas (solo administrador). | `UsuarioController` |
 
-Cada cambio de estado se valida contra el diagrama de estados **DE-01** (`app/models/enums.js`) y queda en la tabla `bitacora`.
+Cada cambio de estado se valida contra el diagrama de estados (`app/models/enums.js`) y queda registrado en la tabla `bitacora`.
 
 ## Inteligencia artificial para análisis de información
 
@@ -74,23 +75,23 @@ Cada cambio de estado se valida contra el diagrama de estados **DE-01** (`app/mo
 
 | Proveedor | Costo y acceso | Modelos | Límite |
 |---|---|---|---|
-| `ovh` · OVHcloud AI Endpoints | Gratuito, **sin clave** | Mistral Small 3.2 (texto) y Qwen2.5-VL 72B (documentos con imagen); configurables con `OVH_AI_MODELO` y `OVH_AI_MODELO_VISION` | ~2 solicitudes/min por IP y modelo; el servicio espera y reintenta solo. `OVH_AI_KEY` (opcional) sube el límite |
-| `gemini` · Google Gemini | Gratuito con `GEMINI_API_KEY` | `GEMINI_MODEL` (por defecto `gemini-flash-latest`) | Cuota gratuita de Google |
+| `ovh` (OVHcloud AI Endpoints) | Gratuito, **sin clave** | Mistral Small 3.2 (texto) y Qwen2.5-VL 72B (documentos con imagen); configurables con `OVH_AI_MODELO` y `OVH_AI_MODELO_VISION` | unas 2 solicitudes por minuto; si se llega al límite, reintenta una vez tras 1 s. `OVH_AI_KEY` (opcional) sube el límite |
+| `gemini` (Google Gemini) | Gratuito con `GEMINI_API_KEY` | `GEMINI_MODEL` (por defecto `gemini-flash-latest`) | Cuota gratuita de Google |
 
 Con OVHcloud, los PDF se envían como texto extraído (`unpdf`); si el PDF es escaneado, sus dos primeras páginas se convierten en imagen. Las fotos se reducen a 1600 px.
 
 | Función | Dónde se usa | Endpoint |
 |---|---|---|
-| Leer un certificado (PDF o imagen) y proponer los datos del caso | Recepción (CU-06) | `POST /api/ia/leer-certificado` |
-| Analizar los soportes digitales de un caso (tipo, legibilidad, coherencia) | Verificación (CU-07) | `POST /api/ia/analizar-soportes/:id` |
+| Leer un certificado (PDF o imagen) y proponer los datos del caso | Recepción | `POST /api/ia/leer-certificado` |
+| Analizar los soportes digitales de un caso (tipo, legibilidad, coherencia) | Verificación | `POST /api/ia/analizar-soportes/:id` |
 | Resumir el historial de incapacidades de un colaborador | Colaboradores | `POST /api/ia/resumen-colaborador/:id` |
-| Analizar el ausentismo mensual | SG-SST (CU-16) | `GET /api/sgsst/reporte?ia=true` |
-| Predecir qué casos podrían superar 180 días | Monitoreo (CU-26) | `POST /api/ia/prediccion-180` |
+| Analizar el ausentismo mensual | Reporte SG-SST | `GET /api/sgsst/reporte?ia=true` |
+| Predecir qué casos podrían superar 180 días | Monitoreo | `POST /api/ia/prediccion-180` |
 
-Reserva clínica: las epicrisis no se envían a la IA, a los análisis solo va el código CIE-10 agrupado y los registros de ausentismo van sin nombre. Los certificados y soportes sí contienen datos personales: antes de usar datos reales, revisen los términos del proveedor elegido (Ley 1581 de 2012, datos de salud = datos sensibles).
+Reserva clínica: las epicrisis no se envían a la IA, a los análisis solo va el código CIE-10 agrupado y los registros de ausentismo van sin nombre. Los certificados y soportes sí contienen datos personales: antes de usar datos reales, revisen los términos del proveedor elegido (Ley 1581 de 2012, los datos de salud son datos sensibles).
 
-## Reglas de negocio clave (`ReglasIncapacidadService`)
+## Reglas de negocio (`ReglasIncapacidadService`)
 
-- **RN-06 / 5.5.2:** días 1–2 al 100 % del IBC (empresa); días 3–90 a dos tercios del IBC (EPS); días 91–180 al 50 % (EPS); desde el día 181 el trámite pasa al fondo de pensiones. Las prórrogas aplican el tramo según los días acumulados. Licencias: 100 % a cargo de la EPS.
-- **Documentos por tipo (5.1.2):** la epicrisis no se exige en enfermedad general de 2 días o menos, ni cuando la EPS ya transcribió.
-- **Plazos de transcripción (5.2.1)** por entidad, con la excepción de 15 días para accidentes de tránsito en Salud Total y 30 días calendario para licencias de paternidad.
+- Liquidación: los días 1 y 2 los paga la empresa al 100 % del IBC; del día 3 al 90 la EPS paga dos tercios del IBC y del 91 al 180, el 50 %. Desde el día 181 el trámite pasa al fondo de pensiones. En las prórrogas el porcentaje depende de los días acumulados. Las licencias las paga la EPS al 100 %.
+- Documentos: la epicrisis no se pide en enfermedad general de 2 días o menos, ni cuando la EPS ya hizo la transcripción.
+- Plazos de transcripción: cada entidad tiene el suyo. Las excepciones son 15 días para accidentes de tránsito en Salud Total y 30 días calendario para licencias de paternidad.

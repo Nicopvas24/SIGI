@@ -72,7 +72,7 @@ export default function Conciliacion() {
   return (
     <div>
       <Encabezado titulo="Conciliación de pagos"
-        descripcion="Contabilidad registra lo consignado por cada entidad; Administración de Personal identifica a qué colaborador e incapacidad corresponde.">
+        descripcion="Contabilidad registra lo que consigna cada entidad y Administración de Personal indica a qué incapacidad corresponde.">
         <input type="month" aria-label="Periodo" style={{ width: 170 }} value={periodo} onChange={(e) => setPeriodo(e.target.value)} />
       </Encabezado>
       <Aviso msj={msj} onCerrar={() => setMsj(null)} />
@@ -80,7 +80,7 @@ export default function Conciliacion() {
       <Panel
         titulo={`Periodo ${periodo}`}
         sub={<>Estado: <b>{conc?.estado === 'CONCILIADA' ? 'Conciliado' : conc ? 'Abierto' : 'Sin consignaciones'}</b>
-          {conc && ` · ${estado.identificadas} identificada(s) · ${estado.por_identificar} por identificar`}</>}
+          {conc && `. Identificadas: ${estado.identificadas}. Por identificar: ${estado.por_identificar}.`}</>}
         extra={
           <div className="en-linea" style={{ alignItems: 'center' }}>
             <span className="cifra"><small>Total consignado</small>{dinero(conc?.total_consignado)}</span>
@@ -134,7 +134,7 @@ export default function Conciliacion() {
         )}
       </Panel>
 
-      <Panel titulo="Identificar consignaciones" sub="Cada consignación por identificar, con los casos pendientes de pago de la misma entidad que podrían corresponderle." cuerpo={false}>
+      <Panel titulo="Identificar consignaciones" sub="Junto a cada consignación aparecen los casos de la misma entidad que podrían corresponder." cuerpo={false}>
         {propuestas?.length ? (
           <ul className="expedientes">
             {[...delPeriodo, ...otras].map(({ pago, candidatos }) => (
@@ -170,7 +170,7 @@ export default function Conciliacion() {
           </ul>
         ) : propuestas && (
           <Vacio icono={ArrowLeftRight} titulo="No hay consignaciones por identificar">
-            Al registrar una consignación, el sistema busca los casos de esa entidad con valores compatibles.
+            Cuando registre una consignación, se buscarán los casos de esa entidad con un valor parecido.
           </Vacio>
         )}
       </Panel>

@@ -1,4 +1,4 @@
-// Autorización por rol (actores de la sección 2). ADMIN siempre pasa.
+// Autorización por rol. ADMIN siempre pasa.
 export function permitirRoles(...roles) {
   return (req, res, next) => {
     if (!req.usuario) return res.status(401).json({ error: 'No autenticado' });

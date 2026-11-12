@@ -43,7 +43,7 @@ export default function Colaboradores() {
 
   return (
     <div>
-      <Encabezado titulo="Colaboradores" descripcion="Historial de incapacidades de cada persona, con sus días acumulados y un resumen preparado por la IA." />
+      <Encabezado titulo="Colaboradores" descripcion="Historial de incapacidades y días acumulados de cada persona." />
       <Aviso msj={msj} onCerrar={() => setMsj(null)} />
 
       <Panel titulo="Equipo" sub={lista ? `${visibles.length} colaborador(es)` : 'Cargando…'} cuerpo={false}
@@ -121,7 +121,7 @@ export default function Colaboradores() {
 
             {historial.casos.length > 0 && (
               <PanelIA titulo="Resumen del historial con IA"
-                descripcion="La IA resume la situación del colaborador, detecta patrones y alerta sobre los hitos de 120, 150 y 180 días. El diagnóstico se envía solo como código agrupado."
+                descripcion="Resumen del historial y avisos si se acerca a los días 120, 150 o 180. Del diagnóstico solo se envía el código."
                 accion="Generar resumen" cargando={cargandoIA} onEjecutar={resumir}>
                 {resumen && <>
                   <p>{resumen.resumen}</p>

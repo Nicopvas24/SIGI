@@ -135,7 +135,7 @@ export default function Recepcion() {
     const req = documentosRequeridos(caso.tipo, caso.dias);
     const tipos = [...req, ...Object.keys(DOCUMENTOS).filter((d) => !req.includes(d))];
     const r0 = await dlg.pedir({
-      titulo: `Adjuntar soportes · ${caso.numero_caso}`,
+      titulo: `Adjuntar soportes al caso ${caso.numero_caso}`,
       descripcion: `Exigidos para ${tipo(caso.tipo).toLowerCase()}: ${req.map(documento).join(', ')}.\nAdjunte el PDF o la foto de cada uno. Los originales se entregan en físico.`,
       textoAceptar: 'Enviar soportes',
       campos: tipos.map((t) => ({ nombre: t, etiqueta: documento(t), tipo: 'file', requerido: false })),
@@ -157,8 +157,8 @@ export default function Recepcion() {
   async function recibir(caso) {
     const cargados = new Set(caso.documentos.map((d) => d.tipo_documento));
     const r0 = await dlg.pedir({
-      titulo: `Registrar recepción · ${caso.numero_caso}`,
-      descripcion: `${caso.colaborador?.usuario?.nombre} · ${tipo(caso.tipo)}. Marque los documentos físicos que entrega.`,
+      titulo: `Registrar recepción del caso ${caso.numero_caso}`,
+      descripcion: `${caso.colaborador?.usuario?.nombre}, ${tipo(caso.tipo).toLowerCase()}. Marque los documentos físicos que entrega.`,
       textoAceptar: 'Registrar recepción',
       campos: [
         { nombre: 'canal', etiqueta: 'Canal de entrega', tipo: 'select', opciones: CANALES, vacio: false, requerido: true,
@@ -178,7 +178,7 @@ export default function Recepcion() {
   async function reemplazo(caso) {
     const opciones = colaboradores.filter((c) => c.id !== caso.colaborador_id).map((c) => [c.id, `${c.usuario?.nombre} · ${c.cargo || c.area || ''}`]);
     const r0 = await dlg.pedir({
-      titulo: `Asignar reemplazo · ${caso.numero_caso}`,
+      titulo: `Asignar reemplazo para el caso ${caso.numero_caso}`,
       descripcion: `${caso.colaborador?.usuario?.nombre} estará ausente del ${fecha(caso.fecha_inicio)} al ${fecha(caso.fecha_fin)}.`,
       textoAceptar: 'Registrar',
       campos: [
@@ -221,7 +221,7 @@ export default function Recepcion() {
                 <input type="file" accept={ARCHIVOS_ACEPTADOS} className="sr-only" onChange={leerCertificado} disabled={lectura?.cargando || !iaActiva} />
               </label>
             </div>
-            <p className="ia-nota">Suba el PDF o la foto del certificado: la IA propone tipo, fechas, días, entidad y diagnóstico. Revise los datos antes de enviar.</p>
+            <p className="ia-nota">Suba el PDF o una foto del certificado y el formulario se llena solo. Revise los datos antes de enviar.</p>
             {lectura && !lectura.cargando && (
               <div className="ia-cuerpo">
                 {lectura.legible === false
@@ -375,7 +375,7 @@ export default function Recepcion() {
           </div>
         ) : casos && (
           <Vacio icono={FolderOpen} titulo={casos.length ? 'No hay casos abiertos' : 'Aún no hay casos'}>
-            {casos.length ? 'Active "Incluir archivados" para ver el historial.' : 'Cuando se informe una incapacidad con el formulario de arriba, aparecerá aquí con su número de caso.'}
+            {casos.length ? 'Active "Incluir archivados" para ver el historial.' : 'Use el formulario de arriba para informar la primera.'}
           </Vacio>
         )}
       </Panel>

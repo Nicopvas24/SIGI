@@ -1,4 +1,4 @@
-// ArchivoController - Módulo "Archivo" (CU-29, CU-30)
+// ArchivoController - Módulo "Archivo"
 import { repoDocumentos, repoPagos, listarIncapacidades, registrarBitacora } from '../repositories/index.js';
 import { NotificacionService } from '../services/NotificacionService.js';
 import { DocumentoService } from '../services/DocumentoService.js';
@@ -49,7 +49,7 @@ export const ArchivoController = {
   }),
 
   /**
-   * CU-30 · Cruce de incapacidades pagadas contra los físicos encontrados.
+   * Cruce de incapacidades pagadas contra los físicos encontrados.
    * body: { fisicos_encontrados: [incapacidad_id, ...] }
    */
   verificarFisicos: asyncHandler(async (req, res) => {
@@ -68,7 +68,7 @@ export const ArchivoController = {
   }),
 
   /**
-   * CU-29 · Archivar una incapacidad pagada: exige soporte de liquidación, deja
+   * Archivar una incapacidad pagada: exige soporte de liquidación, deja
    * constancia de la destrucción de la epicrisis y notifica a Gestión Documental.
    * body: { confirmacion_destruccion_epicrisis: true, ubicacion_fisica }
    */

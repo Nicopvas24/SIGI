@@ -1,4 +1,4 @@
-// CobroController - Módulo "Cobro" (CU-17, CU-18, CU-19, CU-31, CU-32)
+// CobroController - Módulo "Cobro"
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,7 +39,7 @@ export const CobroController = {
   }),
 
   /**
-   * CU-31 · La entidad notifica la aceptación y la fecha promesa de pago,
+   * La entidad notifica la aceptación y la fecha promesa de pago,
    * o el rechazo con su causal. body: { fecha_promesa_pago } | { rechazo: true, causal }
    */
   notificarAceptacion: asyncHandler(async (req, res) => {
@@ -58,7 +58,7 @@ export const CobroController = {
   }),
 
   /**
-   * CU-17 · Solicitud de pago de prestaciones económicas. La constancia de envío es obligatoria.
+   * Solicitud de pago de prestaciones económicas. La constancia de envío es obligatoria.
    * multipart: valor_solicitado?, descripcion?, evidencia
    */
   solicitarPago: asyncHandler(async (req, res) => {
@@ -80,7 +80,7 @@ export const CobroController = {
   }),
 
   /**
-   * CU-18 · Seguimiento semanal en el canal de la entidad.
+   * Seguimiento semanal en el canal de la entidad.
    * multipart: observacion, evidencia?
    */
   seguimiento: asyncHandler(async (req, res) => {
@@ -98,7 +98,7 @@ export const CobroController = {
   }),
 
   /**
-   * CU-19 · Requerimiento de cobro persuasivo (mínimo dos). Genera el texto desde
+   * Requerimiento de cobro persuasivo (mínimo dos). Genera el texto desde
    * la plantilla con fundamentos de hecho y de derecho.
    * multipart: evidencia?, deterioro_crediticio?
    */
@@ -136,7 +136,7 @@ export const CobroController = {
   }),
 
   /**
-   * CU-32 · La entidad paga: registra la transferencia y el soporte de liquidación.
+   * La entidad paga: registra la transferencia y el soporte de liquidación.
    * El caso queda en Pago notificado, pendiente de conciliar con Contabilidad.
    * multipart: valor, fecha_pago, soporte?
    */

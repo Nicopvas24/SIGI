@@ -59,7 +59,7 @@ export default function Transcripcion() {
   });
 
   const rechazar = accion(async (c) => {
-    const causal = await dlg.pedirTexto(`Rechazo de la transcripción · ${c.numero_caso}`, 'Causal informada por la entidad', '', {
+    const causal = await dlg.pedirTexto(`Rechazo de la transcripción del caso ${c.numero_caso}`, 'Causal informada por la entidad', '', {
       campo: { tipo: 'textarea' }, textoAceptar: 'Registrar rechazo', peligro: true,
     });
     if (!causal) return null;
@@ -98,11 +98,11 @@ export default function Transcripcion() {
   return (
     <div>
       <Encabezado titulo="Transcripción y radicación"
-        descripcion="Casos verificados por transcribir o radicar ante la entidad, ordenados por el plazo que les queda, y casos rechazados por subsanar." />
+        descripcion="Los casos están ordenados por el plazo que les queda ante cada entidad." />
       <Aviso msj={msj} onCerrar={() => setMsj(null)} />
 
       <Panel titulo="Bandeja de trámite ante la entidad"
-        sub={casos ? `${conteo('VERIFICADA')} por transcribir o radicar · ${conteo('TRANSCRITA')} transcrito(s) por radicar · ${conteo('RECHAZADA')} rechazado(s)` : 'Cargando…'}
+        sub={casos ? `Por transcribir: ${conteo('VERIFICADA')}. Por radicar: ${conteo('TRANSCRITA')}. Rechazados: ${conteo('RECHAZADA')}.` : 'Cargando…'}
         cuerpo={false}>
         {casos?.length ? (
           <div className="tabla-wrap">
@@ -161,7 +161,7 @@ export default function Transcripcion() {
           </div>
         ) : casos && (
           <Vacio icono={Stamp} titulo="Nada por transcribir ni radicar">
-            Los casos llegan aquí cuando quedan verificados. Los plazos de cada entidad se calculan solos.
+            Los casos verificados pasan a esta bandeja con el plazo de su entidad ya calculado.
           </Vacio>
         )}
       </Panel>
@@ -209,7 +209,7 @@ export default function Transcripcion() {
 
         <PanelIA
           titulo="Análisis de ausentismo con IA"
-          descripcion="Hallazgos, áreas críticas y recomendaciones para el SG-SST. A la IA se envían solo datos agrupados, sin nombres."
+          descripcion="Resumen para el informe del SG-SST. A la IA no se le envían nombres."
           accion="Analizar con IA"
           cargando={cargando === 'ia'}
           onEjecutar={() => reporteSGSST(true)}

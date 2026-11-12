@@ -1,11 +1,11 @@
 -- ============================================================
 -- SIGI - Sistema Integral de Gestión de Incapacidades
 -- Migración 001: esquema inicial (PostgreSQL / Supabase)
--- Basado en el diagrama de clases (sección 7) de la
+-- Basado en el diagrama de clases de la
 -- Documentación de Análisis y Diseño - Segunda Entrega
 -- ============================================================
 
--- ---------- Enumeraciones (sección 7: EstadoIncapacidad, TipoIncapacidad, CanalRecepcion) ----------
+-- ---------- Enumeraciones (EstadoIncapacidad, TipoIncapacidad, CanalRecepcion) ----------
 create type rol_usuario as enum (
   'COLABORADOR', 'LIDER', 'RECEPCIONISTA', 'AUXILIAR',
   'JURIDICA', 'CONTABILIDAD', 'GESTION_DOCUMENTAL', 'ADMIN'
@@ -87,9 +87,9 @@ create table incapacidades (
   fecha_fin          date not null,
   diagnostico_cie10  text,
   observaciones      text,
-  prorroga_de        uuid references incapacidades(id),  -- vínculo de prórroga (CU-01 5a)
+  prorroga_de        uuid references incapacidades(id),  -- caso del que es prórroga
   extemporanea       boolean not null default false,     -- remisión después de 2 días (RN-04)
-  fecha_promesa_pago date,                               -- CU-31
+  fecha_promesa_pago date,                               -- fecha en que la entidad promete pagar
   valor_solicitado   numeric(14,2) default 0,
   valor_pagado       numeric(14,2) default 0,
   created_at         timestamptz not null default now(),
@@ -111,7 +111,7 @@ create table documentos_soporte (
   created_at     timestamptz not null default now()
 );
 
--- ---------- Recepción (CU-04/05/06) ----------
+-- ---------- Recepción ----------
 create table recepciones (
   id             uuid primary key default gen_random_uuid(),
   incapacidad_id uuid not null references incapacidades(id) on delete cascade,
@@ -120,7 +120,7 @@ create table recepciones (
   fecha          timestamptz not null default now()
 );
 
--- ---------- Reemplazos (CU-03) ----------
+-- ---------- Reemplazos ----------
 create table reemplazos (
   id              uuid primary key default gen_random_uuid(),
   incapacidad_id  uuid not null references incapacidades(id) on delete cascade,
@@ -130,7 +130,7 @@ create table reemplazos (
   justificacion   text
 );
 
--- ---------- Formato de seguimiento (CU-08, RN-06) ----------
+-- ---------- Formato de seguimiento  ----------
 create table formatos_seguimiento (
   id              uuid primary key default gen_random_uuid(),
   incapacidad_id  uuid not null references incapacidades(id) on delete cascade,
@@ -156,7 +156,7 @@ create table gestiones (
   fecha             timestamptz not null default now()
 );
 
--- ---------- Evidencias (CU-15: toda gestión debe tener soporte) ----------
+-- ---------- Evidencias (toda gestión debe tener soporte) ----------
 create table evidencias (
   id          uuid primary key default gen_random_uuid(),
   gestion_id  uuid not null references gestiones(id) on delete cascade,
@@ -166,7 +166,7 @@ create table evidencias (
   sello_tiempo timestamptz not null default now()
 );
 
--- ---------- Conciliaciones y pagos (CU-24/25/32) ----------
+-- ---------- Conciliaciones y pagos ----------
 create table conciliaciones (
   id         uuid primary key default gen_random_uuid(),
   periodo    text not null,            -- 'YYYY-MM'
@@ -187,7 +187,7 @@ create table pagos (
                   check (estado in ('POR_IDENTIFICAR', 'IDENTIFICADO', 'CONCILIADO'))
 );
 
--- ---------- Procesos jurídicos (CU-20..23) ----------
+-- ---------- Procesos jurídicos ----------
 create table procesos_juridicos (
   id                  uuid primary key default gen_random_uuid(),
   incapacidad_id      uuid not null references incapacidades(id) on delete cascade,
@@ -204,7 +204,7 @@ create table procesos_juridicos (
   created_at          timestamptz not null default now()
 );
 
--- ---------- Concepto de rehabilitación (CU-27, hitos 120/150) ----------
+-- ---------- Concepto de rehabilitación (hitos de 120 y 150 días) ----------
 create table conceptos_rehabilitacion (
   id              uuid primary key default gen_random_uuid(),
   incapacidad_id  uuid not null references incapacidades(id) on delete cascade,

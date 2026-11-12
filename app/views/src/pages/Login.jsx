@@ -40,8 +40,8 @@ export default function Login() {
       <section className="ingreso-marca">
         <Marca />
         <div className="ingreso-tesis">
-          <h1>Cada incapacidad, del reporte al pago conciliado.</h1>
-          <p>Plazos de transcripción por entidad, cobro a EPS y ARL, y el conteo legal de días acumulados en un solo expediente.</p>
+          <h1>Gestión de incapacidades</h1>
+          <p>Área de Gestión Humana. Ingrese con el usuario que le asignó el administrador.</p>
         </div>
         <div className="ingreso-regla" aria-hidden="true">
           <div className="pista">
@@ -57,10 +57,8 @@ export default function Login() {
 
       <section className="ingreso-form">
         <form onSubmit={entrar}>
-          <div>
-            <h2>Ingresar</h2>
-          </div>
-          <p className="sub">Use su correo corporativo.</p>
+          <h2>Ingresar</h2>
+          <p className="sub">Con su correo de la empresa.</p>
           <div className="campo">
             <label htmlFor="correo">Correo</label>
             <input id="correo" type="email" autoComplete="username" value={correo} onChange={(e) => setCorreo(e.target.value)} required />

@@ -20,7 +20,7 @@ export default function Dashboard() {
     let resultado;
     if (accion === 'REGISTRAR') {
       const r0 = await dlg.pedir({
-        titulo: `Concepto de rehabilitación · ${f.numero_caso}`,
+        titulo: `Concepto de rehabilitación del caso ${f.numero_caso}`,
         descripcion: `${f.colaborador} acumula ${f.dias_acumulados} días. Registre el concepto emitido por la EPS.`,
         textoAceptar: 'Registrar concepto',
         campos: [{ nombre: 'resultado', etiqueta: 'Concepto', tipo: 'select', requerido: true,
@@ -37,7 +37,7 @@ export default function Dashboard() {
   }
 
   async function suspender(f) {
-    const ok = await dlg.confirmar(`Suspender pago por nómina · ${f.colaborador}`,
+    const ok = await dlg.confirmar(`Suspender el pago por nómina de ${f.colaborador}`,
       `Acumula ${f.dias_acumulados} días. Se notificará al colaborador que desde el día 181 debe tramitar el pago ante su fondo de pensiones, y a nómina la novedad.`,
       { textoAceptar: 'Notificar suspensión', peligro: true });
     if (!ok) return;
@@ -60,7 +60,7 @@ export default function Dashboard() {
   return (
     <div>
       <Encabezado titulo="Monitoreo de días acumulados"
-        descripcion="Casos activos que se acercan a los hitos legales de 90, 120, 150 y 180 días, sumando las prórrogas." />
+        descripcion="Los días incluyen las prórrogas." />
       <Aviso msj={msj} onCerrar={() => setMsj(null)} />
 
       <Panel titulo="Regla de 180 días" sub={reporte ? `${filas.length} caso(s) con 90 días o más acumulados` : 'Cargando…'}>
@@ -113,14 +113,14 @@ export default function Dashboard() {
           </div>
         ) : reporte && (
           <Vacio icono={Activity} titulo="Ningún colaborador llega a 90 días">
-            Cuando un caso, sumando sus prórrogas, llegue al día 90, aparecerá aquí con las acciones de cada hito.
+            Desde el día 90 se muestran aquí con las acciones que corresponden.
           </Vacio>
         )}
       </Panel>
 
       <PanelIA
         titulo="Predicción de casos que superarían 180 días"
-        descripcion="La IA estima el riesgo de cada caso activo según días acumulados, prórrogas, tipo de novedad y diagnóstico agrupado."
+        descripcion="Indica qué casos activos podrían pasar de 180 días. Es una estimación: revísela antes de actuar."
         accion="Ejecutar análisis"
         cargando={cargandoIA}
         onEjecutar={predecir}

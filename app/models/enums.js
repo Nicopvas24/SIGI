@@ -1,4 +1,4 @@
-// Enumeraciones del diagrama de clases (sección 7)
+// Enumeraciones del diagrama de clases
 
 export const Roles = Object.freeze({
   COLABORADOR: 'COLABORADOR', LIDER: 'LIDER', RECEPCIONISTA: 'RECEPCIONISTA',

@@ -22,7 +22,7 @@ export default function Cobro() {
 
   const respuesta = accion(async (c) => {
     const r0 = await dlg.pedir({
-      titulo: `Respuesta de ${c.entidad?.nombre} · ${c.numero_caso}`,
+      titulo: `Respuesta de ${c.entidad?.nombre} al caso ${c.numero_caso}`,
       descripcion: 'Registre lo que la entidad notificó al correo autorizado de la empresa.',
       textoAceptar: 'Registrar respuesta',
       campos: [
@@ -41,7 +41,7 @@ export default function Cobro() {
 
   const solicitarPago = accion(async (c) => {
     const r0 = await dlg.pedir({
-      titulo: `Solicitar pago · ${c.numero_caso}`,
+      titulo: `Solicitar pago del caso ${c.numero_caso}`,
       descripcion: `Diligencie el formulario de prestaciones económicas de ${c.entidad?.nombre} y adjunte la constancia de envío.`,
       textoAceptar: 'Registrar solicitud',
       campos: [
@@ -57,7 +57,7 @@ export default function Cobro() {
 
   const seguimiento = accion(async (c) => {
     const r0 = await dlg.pedir({
-      titulo: `Seguimiento · ${c.numero_caso}`,
+      titulo: `Seguimiento del caso ${c.numero_caso}`,
       descripcion: `Consulte el estado del pago en el canal de ${c.entidad?.nombre}.`,
       textoAceptar: 'Registrar seguimiento',
       campos: [
@@ -72,7 +72,7 @@ export default function Cobro() {
 
   const requerimiento = accion(async (c) => {
     const r0 = await dlg.pedir({
-      titulo: `Requerimiento de cobro Nº ${c.requerimientos + 1} · ${c.numero_caso}`,
+      titulo: `Requerimiento de cobro Nº ${c.requerimientos + 1} del caso ${c.numero_caso}`,
       descripcion: 'El sistema redacta el requerimiento con los fundamentos de hecho y de derecho. Envíelo a la entidad y adjunte la constancia.',
       textoAceptar: 'Registrar requerimiento',
       campos: [
@@ -89,7 +89,7 @@ export default function Cobro() {
   });
 
   const trasladar = accion(async (c) => {
-    const causal = await dlg.pedirTexto(`Trasladar a jurídica · ${c.numero_caso}`, 'Causal del traslado', 'Incumplimiento del tiempo promesa de pago', {
+    const causal = await dlg.pedirTexto(`Trasladar el caso ${c.numero_caso} a jurídica`, 'Causal del traslado', 'Incumplimiento del tiempo promesa de pago', {
       descripcion: `Se han enviado ${c.requerimientos} requerimiento(s). Jurídica decidirá si se recupera o se da de baja.`,
       campo: { tipo: 'textarea' }, textoAceptar: 'Trasladar expediente', peligro: true,
     });
@@ -99,7 +99,7 @@ export default function Cobro() {
 
   const pago = accion(async (c) => {
     const r0 = await dlg.pedir({
-      titulo: `Registrar pago · ${c.numero_caso}`,
+      titulo: `Registrar pago del caso ${c.numero_caso}`,
       descripcion: `Saldo por cobrar: ${dinero(c.saldo)}. El pago queda pendiente de conciliar con Contabilidad.`,
       textoAceptar: 'Registrar pago',
       campos: [
@@ -119,7 +119,7 @@ export default function Cobro() {
   return (
     <div>
       <Encabezado titulo="Cartera por entidad"
-        descripcion="Casos radicados ante EPS y ARL: respuesta de la entidad, solicitud de pago, seguimiento semanal y cobro persuasivo.">
+        descripcion="Casos radicados ante la EPS o la ARL que todavía no se han pagado.">
         {entidades.length > 0 && <span className="cifra"><small>Total adeudado</small>{dinero(total)}</span>}
       </Encabezado>
       <Aviso msj={msj} onCerrar={() => setMsj(null)} />

@@ -1,5 +1,5 @@
 // Modelos de dominio: Gestion, Evidencia, Pago, Conciliacion, ProcesoJuridico,
-// ConceptoRehabilitacion y Notificacion (sección 7)
+// ConceptoRehabilitacion y Notificacion
 export class Gestion { constructor(fila) { Object.assign(this, fila); } }
 export class Evidencia { constructor(fila) { Object.assign(this, fila); } }
 export class Pago { constructor(fila) { Object.assign(this, fila); } }

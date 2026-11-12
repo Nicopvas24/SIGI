@@ -18,7 +18,7 @@ export const ReglasIncapacidadService = {
   documentosRequeridos(tipo, { dias = 0, transcritaPorEPS = false } = {}) {
     let req = [...(DOCUMENTOS_POR_TIPO[tipo] || ['CERTIFICADO'])];
     // Epicrisis obligatoria solo para >2 días, accidentes y licencias (definición 3),
-    // y no se exige si la EPS ya transcribió (Act. 3 / CU-02 4b).
+    // y no se exige si la EPS ya transcribió.
     const epicrisisOpcional =
       (tipo === 'ENFERMEDAD_GENERAL' && dias <= 2) || transcritaPorEPS;
     if (epicrisisOpcional) req = req.filter((d) => d !== 'EPICRISIS');

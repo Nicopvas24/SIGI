@@ -1,4 +1,4 @@
-// TranscripcionController - Módulo "Transcripción, radicación y SG-SST" (CU-11 a CU-16)
+// TranscripcionController - Módulo "Transcripción, radicación y SG-SST"
 import { repoGestiones, repoEvidencias, listarIncapacidades, registrarBitacora } from '../repositories/index.js';
 import { ReglasIncapacidadService } from '../services/ReglasIncapacidadService.js';
 import { DocumentoService } from '../services/DocumentoService.js';
@@ -47,7 +47,7 @@ export const TranscripcionController = {
   }),
 
   /**
-   * CU-11/12/13 · Registrar la transcripción ante la entidad.
+   * Registrar la transcripción ante la entidad.
    * multipart: numero_transcripcion, descripcion?, evidencia? (constancia)
    */
   transcribir: asyncHandler(async (req, res) => {
@@ -67,7 +67,7 @@ export const TranscripcionController = {
   }),
 
   /**
-   * CU-14/15 · Radicar ante la EPS/ARL. La evidencia es obligatoria.
+   * Radicar ante la EPS/ARL. La evidencia es obligatoria.
    * multipart: numero_radicado, medio (WEB|FISICO), descripcion?, evidencia
    */
   radicar: asyncHandler(async (req, res) => {
@@ -102,7 +102,7 @@ export const TranscripcionController = {
   }),
 
   /**
-   * CU-16 · Reporte de ausentismo al SG-SST.
+   * Reporte de ausentismo al SG-SST.
    * GET /api/sgsst/reporte?periodo=YYYY-MM  (+ ia=true para el análisis con IA)
    */
   reporteAusentismo: asyncHandler(async (req, res) => {

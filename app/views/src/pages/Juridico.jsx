@@ -35,7 +35,7 @@ export default function Juridico() {
 
   const peticion = accion(async (c) => {
     const r0 = await dlg.pedir({
-      titulo: `Derecho de petición · ${c.numero_caso}`,
+      titulo: `Derecho de petición del caso ${c.numero_caso}`,
       descripcion: 'La entidad tiene 15 días hábiles para responder desde la radicación.',
       textoAceptar: 'Radicar petición',
       campos: [
@@ -50,7 +50,7 @@ export default function Juridico() {
 
   const tutela = accion(async (c) => {
     const r0 = await dlg.pedir({
-      titulo: `Acción de tutela · ${c.numero_caso}`,
+      titulo: `Acción de tutela del caso ${c.numero_caso}`,
       descripcion: 'Procede solo si el derecho de petición fue negado o no tuvo respuesta.',
       textoAceptar: 'Radicar tutela',
       campos: [
@@ -72,7 +72,7 @@ export default function Juridico() {
     <div>
       <Encabezado
         titulo="Cobro jurídico"
-        descripcion="Expedientes trasladados por incumplimiento de pago o rechazo improcedente: decisión, derecho de petición y tutela. Si el resultado es favorable, el pago se registra desde Cobro."
+        descripcion="Si el resultado es favorable, el pago se registra desde Cobro."
       />
       <Aviso msj={msj} onCerrar={() => setMsj(null)} />
 
@@ -93,7 +93,7 @@ export default function Juridico() {
                       <div className="exp-meta">
                         <span><Building2 size={14} aria-hidden="true" />{c.entidad?.nombre}</span>
                         <span>Saldo <b>{dinero(Number(c.valor_solicitado || 0) - Number(c.valor_pagado || 0))}</b></span>
-                        <span>{gestiones.length} gestión(es) · {gestiones.filter((g) => g.tipo === 'REQUERIMIENTO').length} requerimiento(s) · {(c.documentos || []).length} soporte(s)</span>
+                        <span>{gestiones.length} gestión(es), {gestiones.filter((g) => g.tipo === 'REQUERIMIENTO').length} requerimiento(s) y {(c.documentos || []).length} soporte(s)</span>
                       </div>
                     </div>
                     {esJuridica && c.estado === 'EN_COBRO_JURIDICO' && (
@@ -138,7 +138,7 @@ export default function Juridico() {
           </ul>
         ) : casos && (
           <Vacio icono={Gavel} titulo="No hay expedientes en cobro jurídico">
-            Un caso llega aquí cuando Cobro lo traslada tras el cobro persuasivo sin pago.
+            Cobro los envía cuando la entidad no paga después de los requerimientos.
           </Vacio>
         )}
       </Panel>

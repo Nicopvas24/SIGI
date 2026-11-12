@@ -1,4 +1,4 @@
-// MonitoreoController - Módulo "Monitoreo y reportes" (CU-26, CU-27, CU-28)
+// MonitoreoController - Módulo "Monitoreo y reportes"
 // + resumen por colaborador y análisis con IA
 import { repoConceptos, listarIncapacidades, listarColaboradores, colaboradorPorId, registrarBitacora } from '../repositories/index.js';
 import { ReglasIncapacidadService } from '../services/ReglasIncapacidadService.js';
@@ -32,7 +32,7 @@ function casosVigentes(casos) {
 
 export const MonitoreoController = {
   /**
-   * CU-26 · Reporte de casos que superan 90/120/150/180 días acumulados (con prórrogas),
+   * Reporte de casos que superan 90/120/150/180 días acumulados (con prórrogas),
    * con las acciones que corresponden a cada hito.
    */
   reporte: asyncHandler(async (req, res) => {
@@ -61,7 +61,7 @@ export const MonitoreoController = {
   }),
 
   /**
-   * CU-27 · Concepto de rehabilitación.
+   * Concepto de rehabilitación.
    * body: { accion: 'SOLICITAR' } | { accion: 'REGISTRAR', resultado: FAVORABLE|DESFAVORABLE } | { accion: 'ENVIAR_AFP' }
    */
   conceptoRehabilitacion: asyncHandler(async (req, res) => {
@@ -100,7 +100,7 @@ export const MonitoreoController = {
     }
   }),
 
-  /** CU-28 · Notificar suspensión del pago por nómina (más de 180 días acumulados). */
+  /** Notificar suspensión del pago por nómina (más de 180 días acumulados). */
   suspensionNomina: asyncHandler(async (req, res) => {
     const caso = await casoOError(req.params.id);
     const acumulados = calcularAcumulados(await listarIncapacidades({ colaborador_id: caso.colaborador_id })).get(caso.id) || caso.dias;

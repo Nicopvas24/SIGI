@@ -69,7 +69,7 @@ export default function Verificacion() {
   return (
     <div>
       <Encabezado titulo="Verificación documental"
-        descripcion="Revise los soportes de cada caso recibido. Al verificar se diligencia el formato de seguimiento con la liquidación y los soportes quedan archivados en digital." />
+        descripcion="Al verificar un caso se llena el formato de seguimiento con la liquidación." />
       <Aviso msj={msj} onCerrar={() => setMsj(null)} />
 
       <Panel titulo="Pendientes de verificación" sub={casos ? `${casos.length} caso(s), del más antiguo al más reciente` : 'Cargando…'} cuerpo={false}>
@@ -148,7 +148,7 @@ export default function Verificacion() {
           </ul>
         ) : casos && (
           <Vacio icono={FileCheck2} titulo="Bandeja al día">
-            Los casos aparecen aquí cuando se registra la recepción de sus soportes.
+            Nada pendiente. Recepción envía aquí los casos cuando recibe sus soportes.
           </Vacio>
         )}
       </Panel>

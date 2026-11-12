@@ -28,10 +28,10 @@ export default function Archivo() {
 
   async function adjuntarLiquidacion(c) {
     const r0 = await dlg.pedir({
-      titulo: `${c.tiene_soporte_liquidacion ? 'Reemplazar' : 'Adjuntar'} soporte de liquidación · ${c.numero_caso}`,
+      titulo: `${c.tiene_soporte_liquidacion ? 'Reemplazar' : 'Adjuntar'} soporte de liquidación del caso ${c.numero_caso}`,
       descripcion: `Liquidación o comprobante de pago emitido por ${c.entidad?.nombre || 'la entidad'}. Sin este soporte el caso no puede archivarse.`,
       textoAceptar: c.tiene_soporte_liquidacion ? 'Reemplazar' : 'Adjuntar',
-      campos: [{ nombre: 'soporte', etiqueta: 'Archivo (PDF, JPG, PNG o WEBP · máx. 10 MB)', tipo: 'file', requerido: true }],
+      campos: [{ nombre: 'soporte', etiqueta: 'Archivo (PDF, JPG, PNG o WEBP, máximo 10 MB)', tipo: 'file', requerido: true }],
     });
     if (!r0?.soporte) return;
     try {
@@ -75,13 +75,13 @@ export default function Archivo() {
     <div>
       <Encabezado
         titulo="Archivo de pagadas"
-        descripcion="Marque los expedientes físicos encontrados, crúcelos con las pagadas y transfiera a Gestión Documental los que tienen soporte de liquidación."
+        descripcion="Para archivar un caso debe tener el soporte de liquidación y el expediente físico marcado como encontrado."
       />
       <Aviso msj={msj} onCerrar={() => setMsj(null)} />
 
       <Panel
         titulo="Planilla de transferencia"
-        sub={casos ? `${casos.length} caso(s) pagado(s) · ${fisicos.size} físico(s) marcados` : 'Cargando…'}
+        sub={casos ? `${casos.length} caso(s) pagado(s), ${fisicos.size} con físico marcado` : 'Cargando…'}
         extra={casos?.length > 0 && <button className="secundario" onClick={verificar}>Cruzar pagadas con físicas</button>}
         cuerpo={false}
         pie={verificacion && (
@@ -126,7 +126,7 @@ export default function Archivo() {
           </div>
         ) : casos && (
           <Vacio icono={Archive} titulo="No hay pagadas pendientes de archivo">
-            Los casos llegan aquí cuando su pago queda conciliado.
+            Aparecen cuando Contabilidad concilia el pago.
           </Vacio>
         )}
       </Panel>

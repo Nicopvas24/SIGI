@@ -1,4 +1,4 @@
-// ConciliacionController - Módulo "Conciliación" (CU-24, CU-25)
+// ConciliacionController - Módulo "Conciliación"
 import {
   repoPagos, repoConciliaciones, repoIncapacidades, listarIncapacidades, incapacidadCompleta, registrarBitacora,
 } from '../repositories/index.js';

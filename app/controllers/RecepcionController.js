@@ -1,4 +1,4 @@
-// RecepcionController - Módulo "Reporte y recepción" (CU-01 a CU-06)
+// RecepcionController - Módulo "Reporte y recepción"
 import {
   repoIncapacidades, repoEntidades, repoRecepciones, repoReemplazos, repoDocumentos,
   listarIncapacidades, listarColaboradores, colaboradorPorId, colaboradorDeUsuario,
@@ -65,7 +65,7 @@ export const RecepcionController = {
   }),
 
   /**
-   * CU-01 · Informar incapacidad. El colaborador reporta la suya; el líder, la
+   * Informar incapacidad. El colaborador reporta la suya; el líder, la
    * recepción o el auxiliar la pueden reportar en nombre de un colaborador.
    */
   informar: asyncHandler(async (req, res) => {
@@ -143,7 +143,7 @@ export const RecepcionController = {
   }),
 
   /**
-   * CU-02 · Remitir documentación digital. multipart/form-data: un archivo por
+   * Remitir documentación digital. multipart/form-data: un archivo por
    * campo, con el nombre del campo igual al tipo de documento (CERTIFICADO, EPICRISIS...).
    */
   remitirDocumentacion: asyncHandler(async (req, res) => {
@@ -182,7 +182,7 @@ export const RecepcionController = {
   }),
 
   /**
-   * CU-03 · Asignar reemplazo (líder). Valida que el reemplazo no esté
+   * Asignar reemplazo (líder). Valida que el reemplazo no esté
    * incapacitado ni asignado a otro reemplazo en esas fechas.
    */
   asignarReemplazo: asyncHandler(async (req, res) => {
@@ -223,7 +223,7 @@ export const RecepcionController = {
   }),
 
   /**
-   * CU-04/05/06 · Recibir incapacidad: registra canal, receptor y los documentos
+   * Recibir incapacidad: registra canal, receptor y los documentos
    * físicos entregados, y deja el caso en Recibida.
    * body: { canal, documentos_fisicos: ['CERTIFICADO', ...] }
    */

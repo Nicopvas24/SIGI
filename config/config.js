@@ -1,4 +1,4 @@
-// Configuración general (BD, correo, plazos) - sección 12: config/
+// Configuración general: base de datos, IA y plazos del procedimiento
 import 'dotenv/config';
 
 export const config = {

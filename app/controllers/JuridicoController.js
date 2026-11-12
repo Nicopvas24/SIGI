@@ -1,4 +1,4 @@
-// JuridicoController - Módulo "Cobro jurídico" (CU-20 a CU-23)
+// JuridicoController - Módulo "Cobro jurídico"
 import { repoProcesosJuridicos, listarIncapacidades, registrarBitacora } from '../repositories/index.js';
 import { ReglasIncapacidadService } from '../services/ReglasIncapacidadService.js';
 import { NotificacionService } from '../services/NotificacionService.js';
@@ -15,7 +15,7 @@ export const JuridicoController = {
   }),
 
   /**
-   * CU-20 · Trasladar a cobro jurídico: por incumplimiento de pago tras el cobro
+   * Trasladar a cobro jurídico: por incumplimiento de pago tras el cobro
    * persuasivo, o por una causal de rechazo improcedente. body: { causal }
    */
   trasladar: asyncHandler(async (req, res) => {
@@ -47,7 +47,7 @@ export const JuridicoController = {
     res.json({ mensaje: 'Decisión de recuperar registrada. El primer paso es radicar el derecho de petición.' });
   }),
 
-  /** CU-22 · Radicar derecho de petición (término de respuesta: 15 días hábiles). */
+  /** Radicar derecho de petición (término de respuesta: 15 días hábiles). */
   derechoPeticion: asyncHandler(async (req, res) => {
     const caso = await casoOError(req.params.id, ['EN_COBRO_JURIDICO'], 'un derecho de petición');
     if (!req.body.radicado?.trim()) throw errorHttp('Escriba el número de radicado.');
@@ -65,7 +65,7 @@ export const JuridicoController = {
     res.status(201).json({ proceso, mensaje: `Derecho de petición radicado. La entidad debe responder a más tardar el ${vencimiento}.` });
   }),
 
-  /** CU-23 · Radicar acción de tutela: procede si la petición fue negada o no se respondió a tiempo. */
+  /** Radicar acción de tutela: procede si la petición fue negada o no se respondió a tiempo. */
   accionTutela: asyncHandler(async (req, res) => {
     const caso = await casoOError(req.params.id, ['EN_COBRO_JURIDICO'], 'una acción de tutela');
     if (!req.body.radicado?.trim() || !req.body.juzgado?.trim()) throw errorHttp('Escriba el número de proceso y el juzgado.');

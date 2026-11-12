@@ -170,7 +170,7 @@ export function ReglaDias({ casos = [] }) {
         <div className="regla-ticks" />
         {casos.map((c) => (
           <span key={c.id} className={`regla-marca ${c.dias >= 180 ? 'critico' : ''}`} style={{ left: pct(c.dias) }}
-            title={`${c.etiqueta} · ${c.dias} días`} />
+            title={`${c.etiqueta}: ${c.dias} días`} />
         ))}
       </div>
       <div className="regla-hitos">

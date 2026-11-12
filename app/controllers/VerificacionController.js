@@ -1,4 +1,4 @@
-// VerificacionController - Módulo "Verificación documental" (CU-07 a CU-10)
+// VerificacionController - Módulo "Verificación documental"
 import { repoIncapacidades, repoDocumentos, repoFormatos, listarIncapacidades, registrarBitacora } from '../repositories/index.js';
 import { ReglasIncapacidadService } from '../services/ReglasIncapacidadService.js';
 import { NotificacionService } from '../services/NotificacionService.js';
@@ -24,11 +24,11 @@ export const VerificacionController = {
   }),
 
   /**
-   * CU-07 · Verificar documentación.
+   * Verificar documentación.
    * body: { conformes: [documento_id, ...], ibc?, observaciones? }
    * Los documentos no incluidos en `conformes` quedan como no conformes.
-   * Completa: diligencia el formato de seguimiento (CU-08), archiva en digital (CU-10) y deja Verificada.
-   * Incompleta: solicita los faltantes al colaborador con plazo de 3 días hábiles (CU-09).
+   * Completa: diligencia el formato de seguimiento, archiva en digital y deja Verificada.
+   * Incompleta: solicita los faltantes al colaborador con plazo de 3 días hábiles.
    */
   verificar: asyncHandler(async (req, res) => {
     const caso = await casoOError(req.params.id, ['RECIBIDA', 'DOCUMENTACION_INCOMPLETA'], 'verificación');
@@ -81,7 +81,7 @@ export const VerificacionController = {
     });
   }),
 
-  /** CU-09 · Segundo llamado por documentación faltante. */
+  /** Segundo llamado por documentación faltante. */
   segundoLlamado: asyncHandler(async (req, res) => {
     const caso = await casoOError(req.params.id, ['DOCUMENTACION_INCOMPLETA'], 'un segundo llamado');
     await NotificacionService.notificarUsuario(caso.colaborador?.usuario?.id, `Segundo llamado · ${caso.numero_caso}`,

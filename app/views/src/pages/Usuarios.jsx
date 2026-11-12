@@ -124,14 +124,14 @@ export default function Usuarios() {
 
   return (
     <div>
-      <Encabezado titulo="Usuarios" descripcion="Cree las cuentas de acceso, asigne el rol de cada persona y sus datos laborales.">
+      <Encabezado titulo="Usuarios" descripcion="Cuentas de acceso a SIGI y rol de cada persona.">
         {!editando && <button onClick={() => abrir(null)}><Plus size={16} aria-hidden="true" />Nuevo usuario</button>}
       </Encabezado>
       <Aviso msj={msj} onCerrar={() => setMsj(null)} />
 
       {editando && (
         <Panel
-          titulo={esNuevo ? 'Nuevo usuario' : `Editar · ${form.nombre}`}
+          titulo={esNuevo ? 'Nuevo usuario' : `Editar a ${form.nombre}`}
           sub={esNuevo ? 'Podrá ingresar con su correo y la contraseña inicial.' : 'Deje la contraseña vacía para no cambiarla.'}
           extra={<button className="fantasma" onClick={() => setEditando(null)} aria-label="Cerrar formulario"><X size={16} /></button>}
         >
@@ -244,7 +244,7 @@ export default function Usuarios() {
                   <tr key={u.id} className={editando === u.id ? 'fila-editando' : ''}>
                     <td>
                       <b>{u.nombre}</b>{u.id === yo?.id && <span className="texto-tenue"> (usted)</span>}
-                      <span className="secundario-texto">{u.correo} · C.C. {u.documento}</span>
+                      <span className="secundario-texto">{u.correo}, C.C. {u.documento}</span>
                     </td>
                     <td>{ROLES[u.rol] || u.rol}</td>
                     <td>
@@ -273,7 +273,7 @@ export default function Usuarios() {
           </div>
         ) : usuarios && (
           <Vacio icono={UserCog} titulo={usuarios.length ? 'Ningún usuario coincide' : 'Aún no hay usuarios'}>
-            {usuarios.length ? 'Pruebe con otro nombre, correo o documento, o quite el filtro de rol.' : 'Cree el primero con el botón «Nuevo usuario».'}
+            {usuarios.length ? 'Revise lo escrito o quite el filtro de rol.' : 'Cree el primero con el botón "Nuevo usuario".'}
           </Vacio>
         )}
       </Panel>

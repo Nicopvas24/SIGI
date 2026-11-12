@@ -1,4 +1,4 @@
-// Modelo de dominio: Incapacidad (clase central, sección 7)
+// Modelo de dominio: Incapacidad (clase central)
 import { EstadoIncapacidad, TransicionesEstado } from './enums.js';
 
 export class Incapacidad {
