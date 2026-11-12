@@ -12,6 +12,7 @@ import { JuridicoController } from '../controllers/JuridicoController.js';
 import { ConciliacionController } from '../controllers/ConciliacionController.js';
 import { MonitoreoController } from '../controllers/MonitoreoController.js';
 import { ArchivoController } from '../controllers/ArchivoController.js';
+import { UsuarioController } from '../controllers/UsuarioController.js';
 
 const subir = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 10 } });
 const evidencia = subir.single('evidencia');
@@ -91,3 +92,12 @@ rutas.post('/ia/prediccion-180', permitirRoles(AUX), MonitoreoController.predicc
 rutas.get('/archivo/pagadas', permitirRoles(AUX, 'GESTION_DOCUMENTAL'), ArchivoController.pagadas);
 rutas.post('/archivo/verificar-fisicos', permitirRoles(AUX, 'GESTION_DOCUMENTAL'), ArchivoController.verificarFisicos);
 rutas.post('/incapacidades/:id/archivar', permitirRoles(AUX, 'GESTION_DOCUMENTAL'), ArchivoController.archivar);
+rutas.post('/incapacidades/:id/soporte-liquidacion', permitirRoles(AUX, 'GESTION_DOCUMENTAL', 'CONTABILIDAD'),
+  subir.single('soporte'), ArchivoController.adjuntarLiquidacion);
+rutas.get('/incapacidades/:id/soporte-liquidacion', permitirRoles(AUX, 'GESTION_DOCUMENTAL', 'CONTABILIDAD'), ArchivoController.verLiquidacion);
+
+// ---------- Administración de usuarios (solo ADMIN) ----------
+rutas.get('/admin/usuarios', permitirRoles('ADMIN'), UsuarioController.listar);
+rutas.post('/admin/usuarios', permitirRoles('ADMIN'), UsuarioController.crear);
+rutas.put('/admin/usuarios/:id', permitirRoles('ADMIN'), UsuarioController.actualizar);
+rutas.delete('/admin/usuarios/:id', permitirRoles('ADMIN'), UsuarioController.eliminar);

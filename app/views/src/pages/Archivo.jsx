@@ -1,7 +1,7 @@
 // Vista Archivo de incapacidades pagadas
 import { useEffect, useState } from 'react';
-import { Archive, Check } from 'lucide-react';
-import { api } from '../api.js';
+import { Archive, Check, ExternalLink, Upload } from 'lucide-react';
+import { api, formulario } from '../api.js';
 import { Aviso, Encabezado, Panel, Vacio, fecha, useDialogo } from '../ui.jsx';
 
 export default function Archivo() {
@@ -24,6 +24,29 @@ export default function Archivo() {
     try {
       setVerificacion(await api('/archivo/verificar-fisicos', { method: 'POST', body: { fisicos_encontrados: [...fisicos] } }));
     } catch (e) { setMsj({ t: 'error', m: e.message }); }
+  }
+
+  async function adjuntarLiquidacion(c) {
+    const r0 = await dlg.pedir({
+      titulo: `${c.tiene_soporte_liquidacion ? 'Reemplazar' : 'Adjuntar'} soporte de liquidación · ${c.numero_caso}`,
+      descripcion: `Liquidación o comprobante de pago emitido por ${c.entidad?.nombre || 'la entidad'}. Sin este soporte el caso no puede archivarse.`,
+      textoAceptar: c.tiene_soporte_liquidacion ? 'Reemplazar' : 'Adjuntar',
+      campos: [{ nombre: 'soporte', etiqueta: 'Archivo (PDF, JPG, PNG o WEBP · máx. 10 MB)', tipo: 'file', requerido: true }],
+    });
+    if (!r0?.soporte) return;
+    try {
+      const r = await api(`/incapacidades/${c.id}/soporte-liquidacion`, { method: 'POST', formData: formulario({}, { soporte: r0.soporte }) });
+      setMsj({ t: 'ok', m: r.mensaje });
+      cargar();
+    } catch (e) { setMsj({ t: 'error', m: e.message }); }
+  }
+
+  async function verLiquidacion(c) {
+    const ventana = window.open('', '_blank');
+    try {
+      const { url } = await api(`/incapacidades/${c.id}/soporte-liquidacion`);
+      if (ventana) ventana.location = url; else window.open(url, '_blank');
+    } catch (e) { ventana?.close(); setMsj({ t: 'error', m: e.message }); }
   }
 
   async function archivar(c) {
@@ -82,11 +105,19 @@ export default function Archivo() {
                     <td>{c.entidad?.nombre}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>{fecha(c.fecha_inicio)}</td>
                     <td>{c.tiene_soporte_liquidacion
-                      ? <span className="texto-ok"><Check size={14} aria-hidden="true" /> Cargado</span>
-                      : <span className="texto-alerta">Falta</span>}</td>
+                      ? <div className="acciones" style={{ justifyContent: 'flex-start' }}>
+                          <span className="texto-ok"><Check size={14} aria-hidden="true" /> Cargado</span>
+                          <button className="fantasma" onClick={() => verLiquidacion(c)}><ExternalLink size={14} aria-hidden="true" />Ver</button>
+                          <button className="fantasma" onClick={() => adjuntarLiquidacion(c)}>Reemplazar</button>
+                        </div>
+                      : <div className="acciones" style={{ justifyContent: 'flex-start' }}>
+                          <span className="texto-alerta">Falta</span>
+                          <button className="secundario" onClick={() => adjuntarLiquidacion(c)}><Upload size={14} aria-hidden="true" />Adjuntar</button>
+                        </div>}</td>
                     <td><div className="acciones">
                       <button disabled={!c.tiene_soporte_liquidacion || !fisicos.has(c.id)} onClick={() => archivar(c)}
-                        title={!fisicos.has(c.id) ? 'Marque primero el físico como encontrado' : undefined}>Archivar</button>
+                        title={!c.tiene_soporte_liquidacion ? 'Adjunte primero el soporte de liquidación'
+                          : !fisicos.has(c.id) ? 'Marque primero el físico como encontrado' : undefined}>Archivar</button>
                     </div></td>
                   </tr>
                 ))}

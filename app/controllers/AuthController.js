@@ -16,6 +16,7 @@ export const AuthController = {
     if (config.demoMode) {
       const filas = await repoUsuarios.listar({ correo });
       if (!filas.length) throw errorHttp('No existe un usuario con ese correo.', 401);
+      if (filas[0].activo === false) throw errorHttp('Su usuario está inactivo. Comuníquese con el administrador.', 403);
       return res.json({ modo: 'demo', token: null, usuario: filas[0] });
     }
 
@@ -37,8 +38,11 @@ export const AuthController = {
 
   // GET /api/auth/perfil
   perfil: asyncHandler(async (req, res) => {
-    const colaborador = await colaboradorDeUsuario(req.usuario.id);
-    const pendientes = await NotificacionService.pendientes(req.usuario.id);
+    // En paralelo: se consulta en cada cambio de módulo y debe responder rápido
+    const [colaborador, pendientes] = await Promise.all([
+      colaboradorDeUsuario(req.usuario.id),
+      NotificacionService.pendientes(req.usuario.id),
+    ]);
     res.json({ usuario: req.usuario, colaborador, notificaciones_pendientes: pendientes.length });
   }),
 

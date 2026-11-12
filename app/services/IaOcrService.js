@@ -98,6 +98,8 @@ const MAX_LADO_IMAGEN = 1600;
 const MAX_IMAGENES = 4;
 const MAX_TEXTO_PDF = 15000;
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+const ESPERA_MAX_REINTENTO_MS = 1000;   // espera máxima antes de reintentar por límite de uso
+const TIEMPO_MAX_RESPUESTA_MS = 30000;  // corte si el servicio de IA no responde
 
 async function pedirJSONOvh(partes, instruccion) {
   const contenido = [];
@@ -131,19 +133,21 @@ async function llamarOvh(body, intento = 1) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(120000),
+      signal: AbortSignal.timeout(TIEMPO_MAX_RESPUESTA_MS),
     });
   } catch (e) {
     console.error('[IaOcrService] OVH:', e.message);
+    if (e.name === 'TimeoutError') {
+      throw Object.assign(new Error('La IA tardó demasiado en responder. Intente de nuevo con un archivo más liviano.'), { status: 504 });
+    }
     throw Object.assign(new Error('No se pudo contactar el servicio gratuito de IA. Revise la conexión a internet.'), { status: 502 });
   }
   if (res.ok) return res.json();
 
   const detalle = await res.text().catch(() => '');
-  // Límite de solicitudes: esperar lo que indique el servicio (máx. 65 s) y reintentar hasta 2 veces
-  if (res.status === 429 && intento <= 2) {
-    const segundos = Math.min(Number(res.headers.get('retry-after')) || 30, 65);
-    await espera(segundos * 1000);
+  // Límite de solicitudes: un solo reintento tras esperar como máximo 1 s; si persiste, se avisa de inmediato
+  if (res.status === 429 && intento === 1) {
+    await espera(ESPERA_MAX_REINTENTO_MS);
     return llamarOvh(body, intento + 1);
   }
   console.error('[IaOcrService] OVH', res.status, detalle.slice(0, 300));

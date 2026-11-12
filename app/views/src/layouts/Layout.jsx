@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Activity, Archive, ArrowLeftRight, Bell, FileCheck2, FileInput, Gavel, LogOut, Stamp, Users, Wallet } from 'lucide-react';
+import { Activity, Archive, ArrowLeftRight, Bell, FileCheck2, FileInput, Gavel, LogOut, Stamp, UserCog, Users, Wallet } from 'lucide-react';
 import { api, sesion, cerrarSesion } from '../api.js';
 import { ROLES, iniciales, useIA } from '../ui.jsx';
 
@@ -15,6 +15,7 @@ const MENU = [
   { ruta: '/conciliacion', texto: 'Conciliación', icono: ArrowLeftRight, roles: ['CONTABILIDAD', 'AUXILIAR', 'ADMIN'] },
   { ruta: '/archivo', texto: 'Archivo', icono: Archive, roles: ['AUXILIAR', 'GESTION_DOCUMENTAL', 'ADMIN'] },
   { ruta: '/colaboradores', texto: 'Colaboradores', icono: Users, roles: ['AUXILIAR', 'LIDER', 'ADMIN'] },
+  { ruta: '/usuarios', texto: 'Usuarios', icono: UserCog, roles: ['ADMIN'] },
 ];
 
 const INICIO = {

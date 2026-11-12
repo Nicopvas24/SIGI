@@ -12,6 +12,7 @@ import Conciliacion from './pages/Conciliacion.jsx';
 import Archivo from './pages/Archivo.jsx';
 import Colaboradores from './pages/Colaboradores.jsx';
 import Notificaciones from './pages/Notificaciones.jsx';
+import Usuarios from './pages/Usuarios.jsx';
 
 function Protegida({ children }) {
   return sesion() ? children : <Navigate to="/login" replace />;
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="archivo" element={<Archivo />} />
         <Route path="colaboradores" element={<Colaboradores />} />
         <Route path="notificaciones" element={<Notificaciones />} />
+        <Route path="usuarios" element={<Usuarios />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

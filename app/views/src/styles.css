@@ -533,3 +533,6 @@ dialog.dialogo form { max-height: calc(100vh - 34px); }
 }
 .buscador-abiertos > svg { flex-shrink: 0; margin-top: 2px; }
 .buscador-abiertos .sello { margin-left: 2px; vertical-align: 1px; }
+
+/* ---------- Administración de usuarios ---------- */
+tr.fila-editando, tr.fila-editando:hover { background: var(--sello-claro); }
