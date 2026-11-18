@@ -10,11 +10,14 @@ export async function registrarGestion({ caso, tipo, usuario, numero, descripcio
   if (exigirEvidencia && !archivo) {
     throw errorHttp('Adjunte la evidencia de la gestión (pantallazo, constancia o radicado en PDF o imagen).');
   }
-  const url = archivo ? await DocumentoService.guardarEvidencia({ incapacidad: caso, tipoGestion: tipo, archivo }) : null;
-  const gestion = await repoGestiones.crear({
-    incapacidad_id: caso.id, tipo, numero_referencia: numero || null,
-    descripcion: descripcion || null, responsable_id: usuario.id,
-  });
+  // El archivo se sube al mismo tiempo que se guarda la gestión
+  const [url, gestion] = await Promise.all([
+    archivo ? DocumentoService.guardarEvidencia({ incapacidad: caso, tipoGestion: tipo, archivo }) : null,
+    repoGestiones.crear({
+      incapacidad_id: caso.id, tipo, numero_referencia: numero || null,
+      descripcion: descripcion || null, responsable_id: usuario.id,
+    }),
+  ]);
   if (url) {
     await repoEvidencias.crear({ gestion_id: gestion.id, archivo_url: url, descripcion: descripcion || tipo, usuario_id: usuario.id });
   }
@@ -62,7 +65,7 @@ export const TranscripcionController = {
       numero: req.body.numero_transcripcion.trim(),
       descripcion: `Transcripción por ${caso.entidad.canal_transcripcion === 'PORTAL_WEB' ? 'portal web' : 'correo electrónico'}. ${req.body.descripcion || ''}`.trim(),
     });
-    await cambiarEstado(caso.id, 'TRANSCRITA', req.usuario);
+    await cambiarEstado(caso, 'TRANSCRITA', req.usuario);
     res.json({ mensaje: `Caso ${caso.numero_caso} transcrito. El físico pasa a novedades de nómina; el siguiente paso es radicarlo.` });
   }),
 
@@ -79,7 +82,7 @@ export const TranscripcionController = {
       numero: req.body.numero_radicado.trim(),
       descripcion: `Radicación ${medio}. ${req.body.descripcion || ''}`.trim(),
     });
-    await cambiarEstado(caso.id, 'RADICADA', req.usuario);
+    await cambiarEstado(caso, 'RADICADA', req.usuario);
     res.json({ mensaje: `Caso ${caso.numero_caso} radicado. Ahora aparece en Cobro para registrar la respuesta de la entidad.` });
   }),
 
@@ -88,7 +91,7 @@ export const TranscripcionController = {
     const caso = await casoOError(req.params.id, ['TRANSCRITA', 'RADICADA'], 'el registro de un rechazo');
     if (!req.body.causal?.trim()) throw errorHttp('Escriba la causal del rechazo.');
     await registrarGestion({ caso, tipo: 'SEGUIMIENTO', usuario: req.usuario, descripcion: `Rechazo: ${req.body.causal.trim()}` });
-    await cambiarEstado(caso.id, 'RECHAZADA', req.usuario, { causal: req.body.causal.trim() });
+    await cambiarEstado(caso, 'RECHAZADA', req.usuario, { causal: req.body.causal.trim() });
     res.json({ mensaje: `Rechazo registrado. Subsane la causal desde Transcripción y radicación.` });
   }),
 
@@ -97,7 +100,7 @@ export const TranscripcionController = {
     const caso = await casoOError(req.params.id, ['RECHAZADA'], 'subsanación');
     if (!req.body.descripcion?.trim()) throw errorHttp('Describa cómo se subsanó la causal.');
     await registrarGestion({ caso, tipo: 'SEGUIMIENTO', usuario: req.usuario, descripcion: `Subsanación: ${req.body.descripcion.trim()}` });
-    await cambiarEstado(caso.id, 'VERIFICADA', req.usuario);
+    await cambiarEstado(caso, 'VERIFICADA', req.usuario);
     res.json({ mensaje: `Causal subsanada. El caso ${caso.numero_caso} queda listo para una nueva transcripción.` });
   }),
 

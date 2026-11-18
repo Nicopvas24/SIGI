@@ -3,23 +3,20 @@ import { supabase } from '../../config/supabase.js';
 import { repoNotificaciones, repoUsuarios } from '../repositories/index.js';
 
 export const NotificacionService = {
-  async notificarUsuario(usuarioId, asunto, mensaje) {
-    if (!usuarioId) return;
-    try {
-      await repoNotificaciones.crear({ usuario_id: usuarioId, asunto, mensaje });
-    } catch (e) {
-      // Si falla la notificación, el trámite principal no se revierte
-      console.error('[NotificacionService]', e.message);
-    }
+  // Las notificaciones se envían en segundo plano: el trámite responde sin esperarlas
+  // y si una falla no se revierte (solo se registra en consola).
+  notificarUsuario(usuarioId, asunto, mensaje) {
+    if (!usuarioId) return Promise.resolve();
+    repoNotificaciones.crear({ usuario_id: usuarioId, asunto, mensaje })
+      .catch((e) => console.error('[NotificacionService]', e.message));
+    return Promise.resolve();
   },
 
-  async notificarRol(rol, asunto, mensaje) {
-    try {
-      const usuarios = await repoUsuarios.listar({ rol, activo: true });
-      await Promise.all(usuarios.map((u) => this.notificarUsuario(u.id, asunto, mensaje)));
-    } catch (e) {
-      console.error('[NotificacionService]', e.message);
-    }
+  notificarRol(rol, asunto, mensaje) {
+    repoUsuarios.listar({ rol, activo: true })
+      .then((usuarios) => Promise.all(usuarios.map((u) => repoNotificaciones.crear({ usuario_id: u.id, asunto, mensaje }))))
+      .catch((e) => console.error('[NotificacionService]', e.message));
+    return Promise.resolve();
   },
 
   async pendientes(usuarioId) {

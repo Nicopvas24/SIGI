@@ -9,7 +9,10 @@
     "dev": "node --watch server.js",
     "test": "node --test \"tests/unit/*.test.js\"",
     "db:setup": "node database/setup-supabase.mjs",
-    "db:usuarios": "node database/crear-usuarios-auth.mjs"
+    "db:usuarios": "node database/crear-usuarios-auth.mjs",
+    "test:flujo": "node tests/integration/flujo.mjs",
+    "db:limpiar": "node database/limpiar-datos.mjs",
+    "test:usos": "node tests/e2e/usos.mjs"
   },
   "dependencies": {
     "@google/genai": "^3.2.0",
@@ -20,5 +23,8 @@
     "express": "^4.21.0",
     "multer": "^1.4.5-lts.1",
     "unpdf": "^2.1.0"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^24.10.0"
   }
 }

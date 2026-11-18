@@ -27,7 +27,7 @@ export const JuridicoController = {
       if (requerimientos < 2) throw errorHttp('Antes del traslado deben enviarse al menos dos requerimientos de cobro persuasivo.', 422);
     }
     await registrarGestion({ caso, tipo: 'SEGUIMIENTO', usuario: req.usuario, descripcion: `Traslado a jurídica: ${causal}` });
-    await cambiarEstado(caso.id, 'EN_COBRO_JURIDICO', req.usuario, { causal });
+    await cambiarEstado(caso, 'EN_COBRO_JURIDICO', req.usuario, { causal });
     await NotificacionService.notificarRol('JURIDICA', `Expediente ${caso.numero_caso} en cobro jurídico`,
       `${caso.colaborador?.usuario?.nombre} · ${caso.entidad?.nombre}. Causal: ${causal}. Revise el expediente y decida si se recupera o se da de baja.`);
     res.json({ mensaje: `Expediente ${caso.numero_caso} trasladado al área jurídica.` });
@@ -37,7 +37,7 @@ export const JuridicoController = {
   decidir: asyncHandler(async (req, res) => {
     const caso = await casoOError(req.params.id, ['EN_COBRO_JURIDICO'], 'esta decisión');
     if (req.body.decision === 'DAR_DE_BAJA') {
-      await cambiarEstado(caso.id, 'DADA_DE_BAJA', req.usuario, { motivo: req.body.motivo || null });
+      await cambiarEstado(caso, 'DADA_DE_BAJA', req.usuario, { motivo: req.body.motivo || null });
       await NotificacionService.notificarRol('CONTABILIDAD', `Baja de cartera · ${caso.numero_caso}`,
         `Jurídica dio de baja el saldo de ${caso.entidad?.nombre}.${req.body.motivo ? ` Motivo: ${req.body.motivo}` : ''}`);
       return res.json({ mensaje: `Caso ${caso.numero_caso} dado de baja. Contabilidad fue notificada.` });

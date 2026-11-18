@@ -1,6 +1,6 @@
 // Vista Reporte y recepción
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, FileText, FolderOpen, Sparkles, Upload } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileText, FolderOpen, Sparkles, Upload, Pencil, Trash2 } from 'lucide-react';
 import { api, abrirDocumento, formulario, sesion } from '../api.js';
 import BuscadorColaborador from '../components/BuscadorColaborador.jsx';
 import {
@@ -14,6 +14,8 @@ const CANALES = [
 ];
 const ABIERTOS_A_SOPORTES = ['REPORTADA', 'DOCUMENTACION_REMITIDA', 'RECIBIDA', 'DOCUMENTACION_INCOMPLETA'];
 const CERRADOS = ['ARCHIVADA', 'DADA_DE_BAJA'];
+const EDITABLES = ['REPORTADA', 'DOCUMENTACION_REMITIDA', 'RECIBIDA', 'DOCUMENTACION_INCOMPLETA'];
+const EDITABLES_COLABORADOR = ['REPORTADA', 'DOCUMENTACION_REMITIDA'];
 const TERMINADOS = [...CERRADOS, 'PAGADA'];
 const FORM_INICIAL = { colaborador_id: '', tipo: 'ENFERMEDAD_GENERAL', fecha_inicio: '', dias: 1, entidad_id: '', diagnostico_cie10: '', observaciones: '' };
 
@@ -199,6 +201,47 @@ export default function Recepcion() {
     try { await abrirDocumento(d.id); } catch (e) { setMsj({ t: 'error', m: e.message }); }
   }
 
+  // Modificar o eliminar: Gestión Humana hasta antes de verificar; colaborador y líder solo antes de la recepción
+  const puedeEditar = (c) => (gestiona ? EDITABLES : EDITABLES_COLABORADOR).includes(c.estado);
+
+  async function modificar(caso) {
+    const r0 = await dlg.pedir({
+      titulo: `Modificar el caso ${caso.numero_caso}`,
+      descripcion: `${caso.colaborador?.usuario?.nombre}. Corrija los datos y guarde.`,
+      textoAceptar: 'Guardar cambios',
+      campos: [
+        { nombre: 'tipo', etiqueta: 'Tipo de novedad', tipo: 'select', valor: caso.tipo, vacio: false, opciones: Object.entries(TIPOS) },
+        { nombre: 'entidad_id', etiqueta: 'Entidad (EPS o ARL)', tipo: 'select', valor: String(caso.entidad_id), vacio: false,
+          opciones: entidades.map((e) => [String(e.id), `${e.nombre} (${e.tipo})`]) },
+        { nombre: 'fecha_inicio', etiqueta: 'Fecha de inicio', tipo: 'date', valor: caso.fecha_inicio, requerido: true },
+        { nombre: 'dias', etiqueta: 'Días de incapacidad', tipo: 'number', valor: caso.dias, requerido: true, min: 1, step: 1 },
+        { nombre: 'diagnostico_cie10', etiqueta: 'Diagnóstico CIE-10 (opcional)', valor: caso.diagnostico_cie10 || '' },
+        { nombre: 'observaciones', etiqueta: 'Observaciones', tipo: 'textarea', valor: caso.observaciones || '' },
+      ],
+    });
+    if (!r0) return;
+    try {
+      const r = await api(`/incapacidades/${caso.id}`, { method: 'PUT', body: { ...r0, dias: Number(r0.dias), entidad_id: Number(r0.entidad_id) } });
+      setMsj({ t: 'ok', m: r.mensaje });
+      cargar();
+    } catch (e) { setMsj({ t: 'error', m: e.message }); }
+  }
+
+  async function eliminar(caso) {
+    const r0 = await dlg.pedir({
+      titulo: `Eliminar el caso ${caso.numero_caso}`,
+      descripcion: `Se borran el caso y sus soportes digitales. Use esta opción solo si se registró por error o está duplicado.`,
+      textoAceptar: 'Eliminar caso', peligro: true,
+      campos: [{ nombre: 'motivo', etiqueta: 'Motivo', tipo: 'textarea', requerido: true }],
+    });
+    if (!r0) return;
+    try {
+      const r = await api(`/incapacidades/${caso.id}`, { method: 'DELETE', body: { motivo: r0.motivo } });
+      setMsj({ t: 'ok', m: r.mensaje });
+      cargar();
+    } catch (e) { setMsj({ t: 'error', m: e.message }); }
+  }
+
   const puedeAdjuntar = (c) => ABIERTOS_A_SOPORTES.includes(c.estado) && (gestiona || c.colaborador?.usuario?.id === usuario?.id || rol === 'LIDER');
   const incompletos = (casos || []).filter((c) => c.estado === 'DOCUMENTACION_INCOMPLETA');
 
@@ -339,6 +382,10 @@ export default function Recepcion() {
                             {rol === 'LIDER' && !CERRADOS.includes(c.estado) && <button className="secundario" onClick={() => reemplazo(c)}>Reemplazo</button>}
                             {gestiona && ['REPORTADA', 'DOCUMENTACION_REMITIDA'].includes(c.estado) && <button className="secundario" onClick={() => recibir(c)}>Registrar recepción</button>}
                             {puedeAdjuntar(c) && <button onClick={() => remitir(c)}>Adjuntar soportes</button>}
+                            {puedeEditar(c) && <>
+                              <button className="fantasma" onClick={() => modificar(c)} aria-label={`Modificar ${c.numero_caso}`} title="Modificar"><Pencil size={15} /></button>
+                              <button className="peligro" onClick={() => eliminar(c)} aria-label={`Eliminar ${c.numero_caso}`} title="Eliminar"><Trash2 size={15} /></button>
+                            </>}
                           </div>
                         </td>
                       </tr>

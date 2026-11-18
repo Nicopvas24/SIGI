@@ -5,6 +5,7 @@ import { supabase } from '../../config/supabase.js';
 import { Roles } from '../models/enums.js';
 import { repoUsuarios, repoColaboradores, registrarBitacora } from '../repositories/index.js';
 import { asyncHandler, errorHttp } from './_helpers.js';
+import { olvidarUsuarios } from '../middleware/auth.js';
 
 const ROLES = Object.values(Roles);
 const SELECT = `*, colaborador:colaboradores!usuario_id(id, cargo, area, ibc, entidad_eps_id, entidad_arl_id, lider_id)`;
@@ -171,6 +172,7 @@ export const UsuarioController = {
       }
     } catch (e) { throw traducirError(e); }
 
+    olvidarUsuarios();
     await registrarBitacora(req.usuario.id, 'ADMIN:EDITAR_USUARIO', { usuario_id: actual.id, campos: Object.keys(fila), password: Boolean(d.password) });
     res.json({ usuario: await usuarioCompleto(actual.id), mensaje: 'Cambios guardados.' });
   }),
@@ -190,6 +192,7 @@ export const UsuarioController = {
     if (errNotif) throw new Error(errNotif.message);
     if (actual.colaborador) await repoColaboradores.eliminar(actual.colaborador.id);
     await repoUsuarios.eliminar(actual.id);
+    olvidarUsuarios();
     if (actual.auth_id) await supabase.auth.admin.deleteUser(actual.auth_id).catch(() => {});
     await registrarBitacora(req.usuario.id, 'ADMIN:ELIMINAR_USUARIO', { correo: actual.correo, rol: actual.rol });
     res.json({ mensaje: `Usuario ${actual.nombre} eliminado.` });

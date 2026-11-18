@@ -1,4 +1,5 @@
 // Helpers compartidos por los controladores
+import { supabase } from '../../config/supabase.js';
 import { ReglasIncapacidadService } from '../services/ReglasIncapacidadService.js';
 import { NotificacionService } from '../services/NotificacionService.js';
 import {
@@ -14,16 +15,24 @@ export function errorHttp(mensaje, status = 400) {
  * Cambia el estado de una incapacidad validando el diagrama de estados,
  * registra la bitácora y devuelve el caso actualizado.
  */
-export async function cambiarEstado(incapacidadId, nuevoEstado, usuario, detalle = {}) {
-  const actual = await repoIncapacidades.porId(incapacidadId);
+export async function cambiarEstado(casoOId, nuevoEstado, usuario, detalle = {}) {
+  // Si se recibe el caso ya cargado se evita volver a leerlo
+  const actual = typeof casoOId === 'object' ? casoOId : await repoIncapacidades.porId(casoOId);
   if (!actual) throw errorHttp('Caso no encontrado', 404);
   if (actual.estado === nuevoEstado) return actual;
   ReglasIncapacidadService.validarTransicion(actual.estado, nuevoEstado);
-  const actualizada = await repoIncapacidades.actualizar(incapacidadId, { estado: nuevoEstado });
-  await registrarBitacora(usuario?.id, `ESTADO:${actual.estado}->${nuevoEstado}`, {
-    incapacidad_id: incapacidadId, numero_caso: actual.numero_caso, ...detalle,
+
+  // Solo actualiza si nadie cambió el estado mientras tanto (dos personas sobre el mismo caso)
+  const { data, error } = await supabase.from('incapacidades')
+    .update({ estado: nuevoEstado }).eq('id', actual.id).eq('estado', actual.estado).select();
+  if (error) throw new Error(error.message);
+  if (!data.length) throw errorHttp(`El caso ${actual.numero_caso} cambió de estado mientras tanto. Recargue la página.`, 409);
+
+  registrarBitacora(usuario?.id, `ESTADO:${actual.estado}->${nuevoEstado}`, {
+    incapacidad_id: actual.id, numero_caso: actual.numero_caso, ...detalle,
   });
-  return actualizada;
+  if (typeof casoOId === 'object') casoOId.estado = nuevoEstado; // el objeto queda al día para un segundo cambio
+  return data[0];
 }
 
 /** Carga el caso completo o responde 404; opcionalmente exige uno de los estados dados. */
@@ -60,8 +69,8 @@ export async function verificarAlcance(usuario, colaboradorId) {
   }
 }
 
-export async function notificarAuxiliares(asunto, mensaje) {
-  await NotificacionService.notificarRol('AUXILIAR', asunto, mensaje);
+export function notificarAuxiliares(asunto, mensaje) {
+  return NotificacionService.notificarRol('AUXILIAR', asunto, mensaje);
 }
 
 export { incapacidadCompleta };

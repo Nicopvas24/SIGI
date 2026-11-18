@@ -48,6 +48,26 @@ export default function Conciliacion() {
     } catch (err) { setMsj({ t: 'error', m: err.message }); }
   }
 
+  async function confirmarPago(a) {
+    const r0 = await dlg.pedir({
+      titulo: `Confirmar consignación del caso ${a.numero_caso}`,
+      descripcion: `${a.entidad} notificó un pago de ${dinero(a.valor)} para ${a.colaborador}. Confirme cuando lo vea en el extracto de la cuenta.`,
+      textoAceptar: 'Confirmar consignación',
+      campos: [
+        { nombre: 'valor', etiqueta: 'Valor consignado (COP)', tipo: 'number', valor: a.valor, requerido: true, min: 1, step: 1 },
+        { nombre: 'fecha', etiqueta: 'Fecha de la consignación', tipo: 'date', valor: a.fecha_pago, requerido: true },
+      ],
+    });
+    if (!r0) return;
+    try {
+      const r = await api('/conciliacion/confirmar-pago', {
+        method: 'POST', body: { pago_id: a.pago_id, periodo, valor: Number(r0.valor), fecha_consignacion: r0.fecha },
+      });
+      setMsj({ t: r.saldo_pendiente > 0 ? 'info' : 'ok', m: r.mensaje });
+      cargar();
+    } catch (err) { setMsj({ t: 'error', m: err.message }); }
+  }
+
   async function cerrar(forzar = false) {
     try {
       const r = await api('/conciliacion/cerrar', { method: 'POST', body: { periodo, forzar } });
@@ -76,6 +96,38 @@ export default function Conciliacion() {
         <input type="month" aria-label="Periodo" style={{ width: 170 }} value={periodo} onChange={(e) => setPeriodo(e.target.value)} />
       </Encabezado>
       <Aviso msj={msj} onCerrar={() => setMsj(null)} />
+
+      <Panel
+        titulo="Pagos registrados en Cobro"
+        sub="La entidad avisó que pagó. Confirme cada uno cuando aparezca en la cuenta bancaria."
+        cuerpo={false}
+      >
+        {estado?.avisos?.length ? (
+          <div className="tabla-wrap">
+            <table>
+              <thead><tr><th>Caso</th><th>Entidad</th><th>Fecha del pago</th><th className="num">Valor pagado</th><th className="num">Solicitado</th><th>Soporte</th>
+                {rol !== 'JURIDICA' && <th className="th-acciones" />}</tr></thead>
+              <tbody>
+                {estado.avisos.map((a) => (
+                  <tr key={a.pago_id}>
+                    <td><span className="caso">{a.numero_caso}</span><span className="secundario-texto">{a.colaborador}</span></td>
+                    <td>{a.entidad}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{fecha(a.fecha_pago)}</td>
+                    <td className="num"><b>{dinero(a.valor)}</b></td>
+                    <td className={`num ${a.valor < a.saldo ? 'texto-alerta' : ''}`}>{dinero(a.valor_solicitado)}</td>
+                    <td>{a.tiene_soporte ? <span className="texto-ok">Cargado</span> : <span className="texto-tenue">Sin soporte</span>}</td>
+                    <td><div className="acciones">{abierto && <button onClick={() => confirmarPago(a)}>Confirmar consignación</button>}</div></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : estado && (
+          <Vacio icono={ArrowLeftRight} titulo="No hay pagos esperando confirmación">
+            Cuando Cobro registre el pago de una entidad, aparecerá aquí.
+          </Vacio>
+        )}
+      </Panel>
 
       <Panel
         titulo={`Periodo ${periodo}`}
@@ -115,7 +167,7 @@ export default function Conciliacion() {
         {estado?.consignaciones?.length > 0 && (
           <div className="tabla-wrap" style={{ borderTop: '1px solid var(--borde)' }}>
             <table>
-              <thead><tr><th>Fecha</th><th>Entidad</th><th className="num">Valor</th><th>Estado</th></tr></thead>
+              <thead><tr><th>Fecha</th><th>Entidad</th><th>Caso</th><th className="num">Valor</th><th>Estado</th></tr></thead>
               <tbody>
                 {estado.consignaciones.map((p) => {
                   const [t, tono] = ESTADO_PAGO[p.estado] || [p.estado, 'neutro'];
@@ -123,6 +175,9 @@ export default function Conciliacion() {
                     <tr key={p.id}>
                       <td>{fecha(p.fecha_pago)}</td>
                       <td>{entidades.find((e) => e.id === p.entidad_id)?.nombre || '—'}</td>
+                      <td>{p.incapacidad
+                        ? <><span className="caso">{p.incapacidad.numero_caso}</span><span className="secundario-texto">{p.incapacidad.colaborador?.usuario?.nombre}</span></>
+                        : <span className="texto-tenue">Sin identificar</span>}</td>
                       <td className="num">{dinero(p.valor)}</td>
                       <td><span className={`sello ${tono}`}>{t}</span></td>
                     </tr>

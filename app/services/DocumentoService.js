@@ -94,6 +94,14 @@ export const DocumentoService = {
     return { mimeType: data.type || 'application/pdf', base64: buffer.toString('base64'), bytes: buffer.length };
   },
 
+  /** Borra del repositorio los archivos indicados (referencias storage://). Ignora los que no son del bucket. */
+  async eliminarArchivos(urls = []) {
+    const rutas = urls.filter((u) => u?.startsWith(PREFIJO)).map((u) => u.slice(PREFIJO.length));
+    if (!rutas.length) return;
+    const { error } = await supabase.storage.from(config.supabase.bucket).remove(rutas);
+    if (error) console.error('[DocumentoService] no se pudieron borrar archivos:', error.message);
+  },
+
   async marcarEstado(documentoId, estado) {
     return repoDocumentos.actualizar(documentoId, { estado });
   },

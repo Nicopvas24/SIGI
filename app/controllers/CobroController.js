@@ -47,13 +47,13 @@ export const CobroController = {
     if (req.body.rechazo) {
       if (!req.body.causal?.trim()) throw errorHttp('Escriba la causal del rechazo.');
       await registrarGestion({ caso, tipo: 'SEGUIMIENTO', usuario: req.usuario, descripcion: `Rechazo: ${req.body.causal.trim()}` });
-      await cambiarEstado(caso.id, 'RECHAZADA', req.usuario, { causal: req.body.causal.trim() });
+      await cambiarEstado(caso, 'RECHAZADA', req.usuario, { causal: req.body.causal.trim() });
       return res.json({ mensaje: 'Rechazo registrado. El caso pasa a Transcripción y radicación para subsanar la causal.' });
     }
     const fecha = req.body.fecha_promesa_pago;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha || '')) throw errorHttp('Indique la fecha promesa de pago notificada por la entidad.');
     await repoIncapacidades.actualizar(caso.id, { fecha_promesa_pago: fecha });
-    await cambiarEstado(caso.id, 'ACEPTADA', req.usuario, { fecha_promesa_pago: fecha });
+    await cambiarEstado(caso, 'ACEPTADA', req.usuario, { fecha_promesa_pago: fecha });
     res.json({ mensaje: `Aceptación registrada con promesa de pago el ${fecha}. Ya puede solicitar el pago.` });
   }),
 
@@ -71,7 +71,7 @@ export const CobroController = {
       descripcion: `Solicitud de pago por ${valor} (${formulario}). ${req.body.descripcion || ''}`.trim(),
     });
     await repoIncapacidades.actualizar(caso.id, { valor_solicitado: valor });
-    await cambiarEstado(caso.id, 'COBRADA', req.usuario, { valor });
+    await cambiarEstado(caso, 'COBRADA', req.usuario, { valor });
     const acumulados = await diasAcumulados(caso);
     res.json({
       mensaje: `Solicitud de pago registrada. El caso queda en cobro hasta que la entidad pague.` +
@@ -122,7 +122,7 @@ export const CobroController = {
 
     await registrarGestion({ caso, tipo: 'REQUERIMIENTO', usuario: req.usuario, archivo: req.file,
       numero: `REQ-${numero}`, descripcion: texto });
-    if (caso.estado === 'COBRADA') await cambiarEstado(caso.id, 'EN_COBRO_PERSUASIVO', req.usuario);
+    if (caso.estado === 'COBRADA') await cambiarEstado(caso, 'EN_COBRO_PERSUASIVO', req.usuario);
 
     const solicitud = (caso.gestiones || []).filter((g) => g.tipo === 'SOLICITUD_PAGO').map((g) => g.fecha).sort()[0];
     const diasCobro = diasDesde(solicitud || caso.created_at);
@@ -152,7 +152,7 @@ export const CobroController = {
       soporte_url: soporte, estado: 'IDENTIFICADO',
     });
     const diferencia = valor - Number(caso.valor_solicitado || 0);
-    await cambiarEstado(caso.id, 'PAGO_NOTIFICADO', req.usuario, { valor, diferencia });
+    await cambiarEstado(caso, 'PAGO_NOTIFICADO', req.usuario, { valor, diferencia });
     await notificarAuxiliares(`Pago notificado ${caso.numero_caso}`, `La entidad pagó ${valor.toLocaleString('es-CO')}. Pendiente de conciliación.`);
     res.json({
       pago, diferencia,

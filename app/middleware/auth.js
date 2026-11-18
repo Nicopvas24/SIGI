@@ -6,10 +6,27 @@ import { repoUsuarios } from '../repositories/index.js';
 import { Usuario } from '../models/Usuario.js';
 
 // Caché token -> id de Supabase Auth (60 s): evita consultar a Supabase Auth en cada solicitud.
-// El usuario SIGI (rol, activo) sí se lee siempre, así una desactivación surte efecto de inmediato.
+// El usuario SIGI (rol, activo) se guarda 30 s y se olvida apenas el administrador lo modifica.
 const CACHE_MS = 60_000;
 const MAX_CACHE = 1000;
 const tokens = new Map();
+
+// Usuario SIGI en memoria por 30 s para no consultarlo en cada solicitud.
+// UsuarioController llama a olvidarUsuarios() al editar, desactivar o borrar, así el cambio es inmediato.
+const USUARIO_MS = 30_000;
+const usuarios = new Map();
+export function olvidarUsuarios() { usuarios.clear(); }
+async function usuarioPor(campo, valor) {
+  const clave = `${campo}:${valor}`;
+  const guardado = usuarios.get(clave);
+  if (guardado && guardado.vence > Date.now()) return guardado.fila;
+  const fila = (await repoUsuarios.listar({ [campo]: valor }))[0] || null;
+  if (fila) {
+    if (usuarios.size >= MAX_CACHE) usuarios.delete(usuarios.keys().next().value);
+    usuarios.set(clave, { fila, vence: Date.now() + USUARIO_MS });
+  }
+  return fila;
+}
 
 async function authIdDeToken(token) {
   const guardado = tokens.get(token);
@@ -33,9 +50,9 @@ export async function autenticar(req, res, next) {
     const token = encabezado.startsWith('Bearer ') ? encabezado.slice(7) : null;
 
     if (config.demoMode && req.headers['x-demo-correo']) {
-      const filas = await repoUsuarios.listar({ correo: req.headers['x-demo-correo'] });
-      if (!filas.length) return res.status(401).json({ error: 'Usuario demo no encontrado' });
-      return cargarUsuario(req, res, next, filas[0]);
+      const fila = await usuarioPor('correo', req.headers['x-demo-correo']);
+      if (!fila) return res.status(401).json({ error: 'Usuario demo no encontrado' });
+      return cargarUsuario(req, res, next, fila);
     }
 
     if (!token) return res.status(401).json({ error: 'Token requerido' });
@@ -43,9 +60,9 @@ export async function autenticar(req, res, next) {
     const authId = await authIdDeToken(token);
     if (!authId) return res.status(401).json({ error: 'Token inválido o vencido' });
 
-    const filas = await repoUsuarios.listar({ auth_id: authId });
-    if (!filas.length) return res.status(403).json({ error: 'El usuario no está registrado en SIGI' });
-    cargarUsuario(req, res, next, filas[0]);
+    const fila = await usuarioPor('auth_id', authId);
+    if (!fila) return res.status(403).json({ error: 'El usuario no está registrado en SIGI' });
+    cargarUsuario(req, res, next, fila);
   } catch (e) {
     next(e);
   }

@@ -84,13 +84,15 @@ export const ArchivoController = {
     const documentos = await repoDocumentos.listar({ incapacidad_id: caso.id });
     const destruidos = documentos.filter((d) => d.es_reservado);
     const transferidos = documentos.filter((d) => !d.es_reservado && ['CONFORME', 'ARCHIVADO_DIGITAL'].includes(d.estado));
-    for (const d of destruidos) await DocumentoService.marcarEstado(d.id, 'DESTRUIDO');
-    for (const d of transferidos) await DocumentoService.marcarEstado(d.id, 'TRANSFERIDO');
+    await Promise.all([
+      ...destruidos.map((d) => DocumentoService.marcarEstado(d.id, 'DESTRUIDO')),
+      ...transferidos.map((d) => DocumentoService.marcarEstado(d.id, 'TRANSFERIDO')),
+    ]);
     await registrarBitacora(req.usuario.id, 'ARCHIVO:ACTA_DESTRUCCION', {
       numero_caso: caso.numero_caso, documentos_destruidos: destruidos.map((d) => d.tipo_documento), ubicacion_fisica: ubicacion,
     });
 
-    await cambiarEstado(caso.id, 'ARCHIVADA', req.usuario, { ubicacion_fisica: ubicacion });
+    await cambiarEstado(caso, 'ARCHIVADA', req.usuario, { ubicacion_fisica: ubicacion });
     await NotificacionService.notificarRol('GESTION_DOCUMENTAL', `Transferencia ${caso.numero_caso}`,
       `Expediente de ${caso.colaborador?.usuario?.nombre} (${caso.entidad?.nombre}) enviado para custodia. Ubicación: ${ubicacion}.`);
 

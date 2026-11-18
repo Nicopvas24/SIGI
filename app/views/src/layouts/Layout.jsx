@@ -24,11 +24,11 @@ const INICIO = {
 };
 export const inicioDeRol = (rol) => INICIO[rol] || '/recepcion';
 
+// Logo oficial para fondo oscuro (barra lateral y panel del ingreso). Archivos en public/assets/brand/
 export function Marca() {
   return (
     <div className="marca">
-      <span className="marca-sello" aria-hidden="true">SG</span>
-      <span className="marca-texto"><b>SIGI</b><span>Gestión de incapacidades</span></span>
+      <img src="/assets/brand/sigi-logo-fondo-oscuro.svg" width="221" height="48" alt="SIGI · Gestión de incapacidades" />
     </div>
   );
 }

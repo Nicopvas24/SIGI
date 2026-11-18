@@ -36,6 +36,8 @@ rutas.get('/colaboradores', RecepcionController.colaboradores);
 rutas.get('/incapacidades', RecepcionController.listar);
 rutas.get('/incapacidades/:id', RecepcionController.detalle);
 rutas.post('/incapacidades', RecepcionController.informar);
+rutas.put('/incapacidades/:id', RecepcionController.modificar);
+rutas.delete('/incapacidades/:id', RecepcionController.eliminar);
 rutas.post('/incapacidades/:id/documentos', subir.any(), RecepcionController.remitirDocumentacion);
 rutas.post('/incapacidades/:id/reemplazo', permitirRoles('LIDER'), RecepcionController.asignarReemplazo);
 rutas.post('/incapacidades/:id/recibir', permitirRoles(...GESTION), RecepcionController.recibir);
@@ -77,6 +79,7 @@ rutas.get('/conciliacion', permitirRoles(AUX, 'CONTABILIDAD'), ConciliacionContr
 rutas.post('/conciliacion/consignaciones', permitirRoles('CONTABILIDAD', AUX), ConciliacionController.cargarConsignaciones);
 rutas.get('/conciliacion/coincidencias', permitirRoles(AUX, 'CONTABILIDAD'), ConciliacionController.proponerCoincidencias);
 rutas.post('/conciliacion/confirmar', permitirRoles(AUX, 'CONTABILIDAD'), ConciliacionController.confirmarCoincidencia);
+rutas.post('/conciliacion/confirmar-pago', permitirRoles(AUX, 'CONTABILIDAD'), ConciliacionController.confirmarAviso);
 rutas.post('/conciliacion/cerrar', permitirRoles('CONTABILIDAD'), ConciliacionController.cerrarPeriodo);
 
 // ---------- Monitoreo, colaboradores e IA ----------

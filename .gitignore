@@ -6,3 +6,8 @@ storage/documentos/*
 app/views/dist/
 public/index.html
 public/js/
+
+# Respaldos de datos (contienen datos personales)
+database/respaldos/
+public/assets/
+public/manifest.webmanifest

@@ -34,10 +34,11 @@ export const VerificacionController = {
     const caso = await casoOError(req.params.id, ['RECIBIDA', 'DOCUMENTACION_INCOMPLETA'], 'verificación');
     const conformes = new Set([].concat(req.body.conformes || []));
 
-    for (const d of caso.documentos.filter((x) => ['CARGADO', 'EN_REVISION', 'CONFORME', 'NO_CONFORME'].includes(x.estado))) {
-      await DocumentoService.marcarEstado(d.id, conformes.has(d.id) ? 'CONFORME' : 'NO_CONFORME');
-    }
-    const documentos = await repoDocumentos.listar({ incapacidad_id: caso.id });
+    // Se marca cada soporte y se trabaja con los estados nuevos sin volver a leerlos de la base
+    const revisables = ['CARGADO', 'EN_REVISION', 'CONFORME', 'NO_CONFORME'];
+    const documentos = caso.documentos.map((d) => (revisables.includes(d.estado)
+      ? { ...d, estado: conformes.has(d.id) ? 'CONFORME' : 'NO_CONFORME' } : d));
+    await Promise.all(documentos.filter((d) => revisables.includes(d.estado)).map((d) => DocumentoService.marcarEstado(d.id, d.estado)));
     const faltantes = ReglasIncapacidadService.documentosFaltantes(
       caso.tipo, documentos.filter((d) => d.estado === 'CONFORME'), { dias: caso.dias }
     );
@@ -45,7 +46,7 @@ export const VerificacionController = {
     if (faltantes.length) {
       const limite = ReglasIncapacidadService.sumarDiasHabiles(new Date(), config.plazos.documentacionFaltanteDiasHabiles)
         .toISOString().slice(0, 10);
-      await cambiarEstado(caso.id, 'DOCUMENTACION_INCOMPLETA', req.usuario, { faltantes });
+      await cambiarEstado(caso, 'DOCUMENTACION_INCOMPLETA', req.usuario, { faltantes });
       await NotificacionService.notificarUsuario(caso.colaborador?.usuario?.id, `Soportes pendientes · ${caso.numero_caso}`,
         `Faltan o no son válidos: ${listaDocs(faltantes)}. Tiene plazo hasta el ${limite} (3 días hábiles) para entregarlos.` +
         (req.body.observaciones ? ` Observación: ${req.body.observaciones}` : ''));
@@ -67,10 +68,8 @@ export const VerificacionController = {
     await repoIncapacidades.actualizar(caso.id, { valor_solicitado: liq.valorEntidad });
 
     // Archivo digital de los soportes conformes
-    for (const d of documentos.filter((x) => x.estado === 'CONFORME')) {
-      await DocumentoService.marcarEstado(d.id, 'ARCHIVADO_DIGITAL');
-    }
-    await cambiarEstado(caso.id, 'VERIFICADA', req.usuario);
+    await Promise.all(documentos.filter((x) => x.estado === 'CONFORME').map((d) => DocumentoService.marcarEstado(d.id, 'ARCHIVADO_DIGITAL')));
+    await cambiarEstado(caso, 'VERIFICADA', req.usuario);
     await registrarBitacora(req.usuario.id, 'VERIFICACION_COMPLETA', { numero_caso: caso.numero_caso, formato: formato.id });
 
     res.json({

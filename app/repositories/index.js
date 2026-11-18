@@ -85,6 +85,9 @@ export async function colaboradorDeUsuario(usuarioId) {
 }
 
 // Bitácora de auditoría
-export async function registrarBitacora(usuarioId, accion, detalle = {}) {
-  await supabase.from('bitacora').insert({ usuario_id: usuarioId || null, accion, detalle });
+// No bloquea la respuesta: se guarda en segundo plano y un fallo solo se registra en consola
+export function registrarBitacora(usuarioId, accion, detalle = {}) {
+  supabase.from('bitacora').insert({ usuario_id: usuarioId || null, accion, detalle })
+    .then(({ error }) => { if (error) console.error('[bitacora]', accion, error.message); });
+  return Promise.resolve();
 }
