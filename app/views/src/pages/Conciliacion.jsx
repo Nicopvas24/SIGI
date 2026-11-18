@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeftRight, ArrowRight } from 'lucide-react';
 import { api, sesion } from '../api.js';
-import { Aviso, Encabezado, Estado, Panel, Vacio, dinero, fecha, useDialogo } from '../ui.jsx';
+import { Aviso, Encabezado, Estado, InputDinero, Panel, Vacio, dinero, fecha, useDialogo } from '../ui.jsx';
 
 const ESTADO_PAGO = { POR_IDENTIFICAR: ['Por identificar', 'pendiente'], IDENTIFICADO: ['Identificado', ''], CONCILIADO: ['Conciliado', 'cerrado'] };
 
@@ -54,7 +54,7 @@ export default function Conciliacion() {
       descripcion: `${a.entidad} notificó un pago de ${dinero(a.valor)} para ${a.colaborador}. Confirme cuando lo vea en el extracto de la cuenta.`,
       textoAceptar: 'Confirmar consignación',
       campos: [
-        { nombre: 'valor', etiqueta: 'Valor consignado (COP)', tipo: 'number', valor: a.valor, requerido: true, min: 1, step: 1 },
+        { nombre: 'valor', etiqueta: 'Valor consignado', tipo: 'dinero', valor: a.valor, requerido: true, min: 1 },
         { nombre: 'fecha', etiqueta: 'Fecha de la consignación', tipo: 'date', valor: a.fecha_pago, requerido: true },
       ],
     });
@@ -152,8 +152,8 @@ export default function Conciliacion() {
               </select>
             </div>
             <div className="campo">
-              <label htmlFor="c-val">Valor consignado (COP)</label>
-              <input id="c-val" type="number" min="1" step="1" required value={nueva.valor} onChange={(e) => setNueva({ ...nueva, valor: e.target.value })} />
+              <label htmlFor="c-val">Valor consignado</label>
+              <InputDinero id="c-val" min={1} required value={nueva.valor} onChange={(v) => setNueva({ ...nueva, valor: v })} />
             </div>
             <div className="campo">
               <label htmlFor="c-fec">Fecha de la consignación</label>

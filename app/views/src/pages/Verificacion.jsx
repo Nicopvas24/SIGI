@@ -26,7 +26,7 @@ export default function Verificacion() {
         { nombre: 'conformes', etiqueta: 'Documentos conformes', tipo: 'multi',
           opciones: docs.map((d) => [d.id, `${documento(d.tipo_documento)}${d.url ? '' : ' (físico)'}`]),
           valor: docs.filter((d) => d.estado !== 'NO_CONFORME').map((d) => d.id) },
-        { nombre: 'ibc', etiqueta: 'Ingreso base de cotización (IBC)', tipo: 'number', min: 0, step: 1,
+        { nombre: 'ibc', etiqueta: 'Ingreso base de cotización (IBC)', tipo: 'dinero', min: 0,
           valor: caso.colaborador?.ibc || '', ayuda: `Registrado: ${dinero(caso.colaborador?.ibc)}. Se usa para liquidar los días a cargo de la empresa y de la entidad.` },
         { nombre: 'observaciones', etiqueta: 'Observaciones', tipo: 'textarea' },
       ],

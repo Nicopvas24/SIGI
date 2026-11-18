@@ -530,3 +530,8 @@ dialog.dialogo form { max-height: calc(100vh - 34px); }
 
 /* ---------- Administración de usuarios ---------- */
 tr.fila-editando, tr.fila-editando:hover { background: var(--sello-claro); }
+
+/* ---------- Campo de dinero ---------- */
+.campo-dinero { position: relative; display: flex; align-items: center; }
+.campo-dinero > span { position: absolute; left: 11px; color: var(--texto-3); font-weight: 560; pointer-events: none; }
+.campo-dinero input { padding-left: 24px; font-variant-numeric: tabular-nums; }

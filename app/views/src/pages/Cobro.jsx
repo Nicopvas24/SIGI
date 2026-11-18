@@ -45,7 +45,7 @@ export default function Cobro() {
       descripcion: `Diligencie el formulario de prestaciones económicas de ${c.entidad?.nombre} y adjunte la constancia de envío.`,
       textoAceptar: 'Registrar solicitud',
       campos: [
-        { nombre: 'valor_solicitado', etiqueta: 'Valor solicitado (COP)', tipo: 'number', min: 1, step: 1, requerido: true,
+        { nombre: 'valor_solicitado', etiqueta: 'Valor solicitado', tipo: 'dinero', min: 1, requerido: true,
           valor: Number(c.valor_solicitado) || '', ayuda: 'Calculado en el formato de seguimiento. Corríjalo si la liquidación de la entidad es distinta.' },
         { nombre: 'evidencia', etiqueta: 'Constancia de envío', tipo: 'file', requerido: true },
       ],
@@ -103,7 +103,7 @@ export default function Cobro() {
       descripcion: `Saldo por cobrar: ${dinero(c.saldo)}. El pago queda pendiente de conciliar con Contabilidad.`,
       textoAceptar: 'Registrar pago',
       campos: [
-        { nombre: 'valor', etiqueta: 'Valor pagado (COP)', tipo: 'number', valor: c.saldo, requerido: true, min: 1, step: 1 },
+        { nombre: 'valor', etiqueta: 'Valor pagado', tipo: 'dinero', valor: c.saldo, requerido: true, min: 1 },
         { nombre: 'fecha_pago', etiqueta: 'Fecha de pago', tipo: 'date', valor: hoy(), requerido: true },
         { nombre: 'soporte', etiqueta: 'Soporte de liquidación de la entidad', tipo: 'file', ayuda: 'Sin este soporte la incapacidad no se podrá archivar.' },
       ],

@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pencil, Plus, Search, Trash2, UserCog, X } from 'lucide-react';
 import { api, sesion } from '../api.js';
-import { Aviso, Encabezado, Panel, ROLES, Vacio, useDialogo } from '../ui.jsx';
+import { Aviso, Encabezado, InputDinero, Panel, ROLES, Vacio, useDialogo } from '../ui.jsx';
 
 const PUEDE_SER_COLABORADOR = ['COLABORADOR', 'LIDER'];
 const VACIO = {
@@ -183,8 +183,8 @@ export default function Usuarios() {
                 <input id="u-area" value={form.area} onChange={set('area')} />
               </div>
               <div className="campo">
-                <label htmlFor="u-ibc">IBC (COP)</label>
-                <input id="u-ibc" type="number" min="0" step="1" value={form.ibc} onChange={set('ibc')} />
+                <label htmlFor="u-ibc">IBC</label>
+                <InputDinero id="u-ibc" min={0} value={form.ibc} onChange={(v) => setForm((f) => ({ ...f, ibc: v }))} />
                 <span className="ayuda">Base para liquidar las incapacidades.</span>
               </div>
               <div className="campo">

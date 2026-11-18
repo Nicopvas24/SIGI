@@ -76,13 +76,13 @@ export const ConciliacionController = {
     }
     const conciliacion = await conciliacionAbierta(periodo);
 
-    const total = consignaciones.reduce((s, c) => s + Number(c.valor), 0);
+    const total = consignaciones.reduce((s, c) => s + Math.round(Number(c.valor)), 0);
     await repoConciliaciones.actualizar(conciliacion.id, { total_consignado: Number(conciliacion.total_consignado || 0) + total });
     const creados = [];
     for (const c of consignaciones) {
       creados.push(await repoPagos.crear({
         entidad_id: Number(c.entidad_id), conciliacion_id: conciliacion.id,
-        valor: Number(c.valor), fecha_pago: c.fecha_pago, estado: 'POR_IDENTIFICAR',
+        valor: Math.round(Number(c.valor)), fecha_pago: c.fecha_pago, estado: 'POR_IDENTIFICAR',
       }));
     }
     await registrarBitacora(req.usuario.id, 'CONCILIACION:CONSIGNACIONES', { periodo, total });
@@ -158,7 +158,7 @@ export const ConciliacionController = {
     }
     const caso = await incapacidadCompleta(aviso.incapacidad_id);
     if (caso.estado !== 'PAGO_NOTIFICADO') throw errorHttp(`El caso ${caso.numero_caso} no tiene un pago pendiente de confirmar.`, 422);
-    const valor = req.body.valor ? Number(req.body.valor) : Number(aviso.valor);
+    const valor = Math.round(req.body.valor ? Number(req.body.valor) : Number(aviso.valor));
     if (!(valor > 0)) throw errorHttp('El valor consignado debe ser mayor que cero.');
 
     const conciliacion = await conciliacionAbierta(periodo);

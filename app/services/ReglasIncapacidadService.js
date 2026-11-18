@@ -123,4 +123,5 @@ export const ReglasIncapacidadService = {
   },
 };
 
-function redondear(v) { return Math.round(v * 100) / 100; }
+// Los valores se manejan en pesos enteros (en COP no se liquidan centavos)
+function redondear(v) { return Math.round(v); }

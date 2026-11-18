@@ -55,7 +55,7 @@ export const VerificacionController = {
     }
 
     // Formato de seguimiento con la liquidación según días acumulados
-    const ibc = Number(req.body.ibc || caso.colaborador?.ibc || 0);
+    const ibc = Math.round(Number(req.body.ibc || caso.colaborador?.ibc || 0));
     const previos = (await diasAcumulados(caso)) - caso.dias;
     const liq = ReglasIncapacidadService.liquidar({ tipo: caso.tipo, dias: caso.dias, ibc, diasAcumulados: previos });
     const versiones = await repoFormatos.listar({ incapacidad_id: caso.id });

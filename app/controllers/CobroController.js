@@ -63,7 +63,7 @@ export const CobroController = {
    */
   solicitarPago: asyncHandler(async (req, res) => {
     const caso = await casoOError(req.params.id, ['ACEPTADA'], 'la solicitud de pago');
-    const valor = Number(req.body.valor_solicitado || caso.valor_solicitado || 0);
+    const valor = Math.round(Number(req.body.valor_solicitado || caso.valor_solicitado || 0));
     if (valor <= 0) throw errorHttp('El valor a solicitar debe ser mayor que cero. Revise el IBC del formato de seguimiento.');
     const formulario = caso.tipo.startsWith('LICENCIA') ? 'formulario de licencias' : 'formulario de prestaciones económicas';
     await registrarGestion({
@@ -142,7 +142,7 @@ export const CobroController = {
    */
   registrarPago: asyncHandler(async (req, res) => {
     const caso = await casoOError(req.params.id, PUEDE_PAGAR, 'el registro de un pago');
-    const valor = Number(req.body.valor);
+    const valor = Math.round(Number(req.body.valor));
     if (!(valor > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(req.body.fecha_pago || '')) {
       throw errorHttp('Indique el valor pagado (mayor que cero) y la fecha del pago.');
     }

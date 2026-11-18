@@ -47,7 +47,7 @@ function leerDatos(body, { parcial = false } = {}) {
     const c = body.colaborador;
     if (c === null) d.colaborador = null;
     else {
-      const ibc = c.ibc === '' || c.ibc == null ? 0 : Number(c.ibc);
+      const ibc = c.ibc === '' || c.ibc == null ? 0 : Math.round(Number(c.ibc));
       if (!(ibc >= 0)) throw errorHttp('El IBC debe ser un valor mayor o igual a cero.');
       const id = (v) => (v === '' || v == null ? null : v);
       d.colaborador = {

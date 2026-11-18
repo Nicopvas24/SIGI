@@ -14,7 +14,7 @@ test('RN-06: días 3-90 al 66.67% a cargo de la EPS', () => {
   const r = R.liquidar({ tipo: 'ENFERMEDAD_GENERAL', dias: 10, ibc: 3000000 });
   assert.equal(r.diasEmpresa, 2);
   assert.equal(r.diasEntidad, 8);
-  assert.equal(r.valorEntidad, Math.round(8 * 100000 * (2 / 3) * 100) / 100);
+  assert.equal(r.valorEntidad, Math.round(8 * 100000 * (2 / 3))); // pesos enteros
 });
 
 test('RN-06: prórroga aplica el tramo según días acumulados (91-180 al 50%)', () => {

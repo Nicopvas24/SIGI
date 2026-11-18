@@ -6,6 +6,51 @@ import { CircleAlert, CircleCheck, Info, Sparkles, X } from 'lucide-react';
 const fmtDinero = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
 export const dinero = (v) => fmtDinero.format(Number(v || 0));
 
+// ---------- Campo de dinero: muestra "12.600.000" mientras se escribe y entrega pesos enteros ----------
+const fmtMiles = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 });
+/** Convierte lo escrito ("$ 12.600.000", 12600000.4) en pesos enteros, o '' si está vacío. */
+export const aPesos = (v) => {
+  if (v === '' || v === null || v === undefined) return '';
+  if (typeof v === 'number') return Math.round(v);
+  const digitos = String(v).replace(/\D/g, '');
+  return digitos ? Number(digitos) : '';
+};
+const conMiles = (v) => (v === '' ? '' : fmtMiles.format(v));
+
+export function InputDinero({ value, onChange, min, className = '', ...props }) {
+  const ref = useRef(null);
+  const pesos = aPesos(value);
+  useEffect(() => {
+    // Valor mínimo con mensaje propio (el campo es de texto, no type=number)
+    ref.current?.setCustomValidity(min !== undefined && pesos !== '' && pesos < min ? `El valor mínimo es $ ${conMiles(min)}.` : '');
+  }, [pesos, min]);
+  function cambiar(e) {
+    const el = e.target;
+    const digitosAntes = el.value.slice(0, el.selectionStart).replace(/\D/g, '').length;
+    const nuevo = aPesos(el.value.slice(0, 15));
+    onChange(nuevo);
+    // Deja el cursor después del mismo número de dígitos, aunque cambien los puntos
+    requestAnimationFrame(() => {
+      if (!ref.current) return;
+      const texto = ref.current.value;
+      let pos = 0;
+      for (let vistos = 0; pos < texto.length && vistos < digitosAntes; pos++) if (/\d/.test(texto[pos])) vistos++;
+      ref.current.setSelectionRange(pos, pos);
+    });
+  }
+  return (
+    <div className={`campo-dinero ${className}`}>
+      <span aria-hidden="true">$</span>
+      <input ref={ref} type="text" inputMode="numeric" autoComplete="off" value={conMiles(pesos)} onChange={cambiar} {...props} />
+    </div>
+  );
+}
+
+function CampoDineroDialogo({ c, id, autoFocus }) {
+  const [valor, setValor] = useState(aPesos(c.valor));
+  return <InputDinero id={id} name={c.nombre} value={valor} onChange={setValor} required={c.requerido} min={c.min} autoFocus={autoFocus} />;
+}
+
 const fmtFecha = new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 export function fecha(v) {
   if (!v) return '—';
@@ -266,6 +311,8 @@ export function DialogoProvider({ children }) {
       else if (c.tipo === 'file') {
         const f = fd.get(c.nombre);
         valores[c.nombre] = f && f.size ? f : null;
+      } else if (c.tipo === 'dinero') {
+        valores[c.nombre] = aPesos(fd.get(c.nombre)); // número entero de pesos o ''
       } else valores[c.nombre] = String(fd.get(c.nombre) ?? '').trim();
     }
     cerrar(valores);
@@ -339,6 +386,8 @@ function CampoDialogo({ c, autoFocus }) {
         {c.opciones.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
       </select>
     );
+  } else if (c.tipo === 'dinero') {
+    control = <CampoDineroDialogo c={c} id={id} autoFocus={autoFocus} />;
   } else if (c.tipo === 'file') {
     control = <input id={id} name={c.nombre} type="file" accept={c.accept || ARCHIVOS_ACEPTADOS} required={c.requerido} autoFocus={autoFocus} />;
   } else {
