@@ -64,12 +64,16 @@ export const SELECT_COLABORADOR = `
   arl:entidades!entidad_arl_id(id, nombre)
 `;
 
-export async function listarColaboradores({ liderId } = {}) {
+/** El personal que opera la plataforma (recepción, auxiliar, jurídica...) no se reporta como incapacitado. */
+export const esColaboradorReportable = (c) => c?.usuario?.rol === 'COLABORADOR';
+
+export async function listarColaboradores({ liderId, soloReportables = false } = {}) {
   let q = supabase.from('colaboradores').select(SELECT_COLABORADOR);
   if (liderId) q = q.eq('lider_id', liderId);
   const { data, error } = await q;
   if (error) throw new Error(error.message);
-  return data.sort((a, b) => (a.usuario?.nombre || '').localeCompare(b.usuario?.nombre || ''));
+  return (soloReportables ? data.filter(esColaboradorReportable) : data)
+    .sort((a, b) => (a.usuario?.nombre || '').localeCompare(b.usuario?.nombre || ''));
 }
 
 export async function colaboradorPorId(id) {

@@ -4,7 +4,7 @@ import { Pencil, Plus, Search, Trash2, UserCog, X } from 'lucide-react';
 import { api, sesion } from '../api.js';
 import { Aviso, Encabezado, InputDinero, Panel, ROLES, Vacio, useDialogo } from '../ui.jsx';
 
-const PUEDE_SER_COLABORADOR = ['COLABORADOR', 'LIDER'];
+const PUEDE_SER_COLABORADOR = ['COLABORADOR'];
 const VACIO = {
   nombre: '', documento: '', correo: '', rol: 'COLABORADOR', password: '', activo: true,
   esColaborador: true, cargo: '', area: '', ibc: '', entidad_eps_id: '', entidad_arl_id: '', lider_id: '',
@@ -170,8 +170,11 @@ export default function Usuarios() {
             <div className="campo ancho">
               <label className="opcion-check" style={{ width: 'fit-content' }}>
                 <input type="checkbox" checked={form.esColaborador} onChange={set('esColaborador')} />
-                Es colaborador de la empresa (puede tener incapacidades)
+                Tiene datos laborales (cargo, IBC, EPS y ARL)
               </label>
+              {form.rol !== 'COLABORADOR' && (
+                <span className="ayuda">Al reportar una incapacidad solo aparecen los usuarios con rol Colaborador. El personal que opera SIGI no sale en esa lista.</span>
+              )}
             </div>
             {form.esColaborador && <>
               <div className="campo">

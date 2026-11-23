@@ -116,7 +116,7 @@ export const MonitoreoController = {
   /** GET /api/monitoreo/colaboradores - historial resumido por colaborador */
   colaboradores: asyncHandler(async (req, res) => {
     const alcance = await alcanceColaboradores(req.usuario);
-    const colaboradores = (await listarColaboradores()).filter((c) => !alcance || alcance.includes(c.id));
+    const colaboradores = (await listarColaboradores({ soloReportables: true })).filter((c) => !alcance || alcance.includes(c.id));
     const casos = await listarIncapacidades(alcance ? { colaborador_id: alcance.length ? alcance : ['00000000-0000-0000-0000-000000000000'] } : {});
     const acumulados = calcularAcumulados(casos);
     const vigentes = casosVigentes(casos);

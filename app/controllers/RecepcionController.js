@@ -2,7 +2,7 @@
 import {
   repoIncapacidades, repoEntidades, repoRecepciones, repoReemplazos, repoDocumentos,
   listarIncapacidades, listarColaboradores, colaboradorPorId, colaboradorDeUsuario,
-  registrarBitacora,
+  registrarBitacora, esColaboradorReportable,
 } from '../repositories/index.js';
 import { ReglasIncapacidadService } from '../services/ReglasIncapacidadService.js';
 import { NotificacionService } from '../services/NotificacionService.js';
@@ -141,18 +141,18 @@ export const RecepcionController = {
     res.json(await repoEntidades.listar({}, { orden: 'nombre', asc: true }));
   }),
 
-  // GET /api/colaboradores - el líder ve su equipo; el colaborador, solo su registro
+  // GET /api/colaboradores - a quién se le puede reportar una incapacidad.
+  // Solo usuarios con rol Colaborador: el personal que opera la plataforma no aparece.
+  // El líder ve su equipo; el colaborador, solo su registro.
   colaboradores: asyncHandler(async (req, res) => {
     if (req.usuario.rol === 'COLABORADOR') {
       const propio = await colaboradorDeUsuario(req.usuario.id);
       return res.json(propio ? [propio] : []);
     }
     if (req.usuario.rol === 'LIDER') {
-      const equipo = await listarColaboradores({ liderId: req.usuario.id });
-      const propio = await colaboradorDeUsuario(req.usuario.id);
-      return res.json(propio && !equipo.some((c) => c.id === propio.id) ? [propio, ...equipo] : equipo);
+      return res.json(await listarColaboradores({ liderId: req.usuario.id, soloReportables: true }));
     }
-    res.json(await listarColaboradores());
+    res.json(await listarColaboradores({ soloReportables: true }));
   }),
 
   /**
@@ -175,6 +175,9 @@ export const RecepcionController = {
     } else if (req.body.colaborador_id) {
       colaborador = await colaboradorPorId(req.body.colaborador_id);
       if (!colaborador) throw errorHttp('El colaborador seleccionado no existe.', 404);
+      if (!esColaboradorReportable(colaborador)) {
+        throw errorHttp(`${colaborador.usuario?.nombre || 'Esa persona'} hace parte del personal que opera SIGI. Solo se reportan incapacidades de colaboradores.`, 422);
+      }
       await verificarAlcance(req.usuario, colaborador.id);
     } else {
       throw errorHttp('Seleccione el colaborador que tiene la incapacidad.');
@@ -372,7 +375,7 @@ export const RecepcionController = {
     let colaborador = null;
     const alcance = await alcanceColaboradores(req.usuario);
     if (datos.documento) {
-      const todos = await listarColaboradores();
+      const todos = await listarColaboradores({ soloReportables: true });
       // Solo dígitos: el certificado suele traer el tipo ("CC 1001234567")
       const digitos = (t) => String(t || '').replace(/\D/g, '');
       const c = digitos(datos.documento) && todos.find((x) => digitos(x.usuario?.documento) === digitos(datos.documento));

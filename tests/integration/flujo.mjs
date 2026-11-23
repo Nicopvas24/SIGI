@@ -84,7 +84,8 @@ async function escenarioDe(nombre, fn) {
 // ---------- Datos de referencia ----------
 const AUX = 'auxiliar@sigi.demo', REC = 'recepcion@sigi.demo', CONT = 'contabilidad@sigi.demo';
 const JUR = 'juridica@sigi.demo', DOCU = 'documental@sigi.demo', ADMIN = 'admin@sigi.demo', LIDER = 'lider@sigi.demo';
-const CARLOS = 'colaborador@sigi.demo', JORGE = 'jorge.castano@sigi.demo';
+const CARLOS = 'colaborador@sigi.demo', JORGE = 'jorge.castano@sigi.demo', LUIS = 'luis.montoya@sigi.demo';
+const PERSONAL = [AUX, REC, CONT, JUR, DOCU, ADMIN, LIDER];
 
 const colaboradores = await get(ADMIN, '/colaboradores');
 const entidades = await get(ADMIN, '/entidades');
@@ -325,9 +326,9 @@ await escenarioDe('6. Accidente laboral de María: pago parcial', async () => {
 
 // =====================================================================
 await escenarioDe('7. Modificar y eliminar una incapacidad', async () => {
-  const rosa = colab(REC);
+  const luis = colab(LUIS);
   const { caso: c } = await paso('El auxiliar registra un caso con un error en los días', () =>
-    post(AUX, '/incapacidades', { colaborador_id: rosa.id, tipo: 'ENFERMEDAD_GENERAL', entidad_id: entidad('Salud Total').id, fecha_inicio: '2026-11-12', dias: 3, confirmar_no_prorroga: true }));
+    post(AUX, '/incapacidades', { colaborador_id: luis.id, tipo: 'ENFERMEDAD_GENERAL', entidad_id: entidad('Salud Total').id, fecha_inicio: '2026-11-12', dias: 3, confirmar_no_prorroga: true }));
   await paso('Se corrigen los días y la fecha final se recalcula', async () => {
     // Se envían todos los campos, como lo hace el diálogo de la pantalla
     await llamar(AUX, 'PUT', `/incapacidades/${c.id}`, { body: {
@@ -350,8 +351,26 @@ await escenarioDe('7. Modificar y eliminar una incapacidad', async () => {
     cierto(verificado, 'no hay casos verificados para probar');
     await llamar(AUX, 'DELETE', `/incapacidades/${verificado.id}`, { body: { motivo: 'prueba' }, esperado: 422 });
   });
-  await paso('Queda un caso de Rosa pendiente de recepción', () =>
-    post(AUX, '/incapacidades', { colaborador_id: rosa.id, tipo: 'ENFERMEDAD_GENERAL', entidad_id: entidad('Salud Total').id, fecha_inicio: '2026-11-16', dias: 2, diagnostico_cie10: 'A09', confirmar_no_prorroga: true }));
+  await paso('Queda un caso de Luis pendiente de recepción', () =>
+    post(AUX, '/incapacidades', { colaborador_id: luis.id, tipo: 'ENFERMEDAD_GENERAL', entidad_id: entidad('Salud Total').id, fecha_inicio: '2026-11-16', dias: 2, diagnostico_cie10: 'A09', confirmar_no_prorroga: true }));
+});
+
+// =====================================================================
+await escenarioDe('7b. El personal de la plataforma no se reporta como incapacitado', async () => {
+  await paso('La lista para reportar solo trae usuarios con rol Colaborador', async () => {
+    for (const quien of [ADMIN, REC, AUX, LIDER]) {
+      const lista = await get(quien, '/colaboradores');
+      cierto(lista.length > 0, `${quien} no ve colaboradores`);
+      const intruso = lista.find((x) => x.usuario?.rol !== 'COLABORADOR' || PERSONAL.includes(x.usuario?.correo));
+      cierto(!intruso, `${quien} ve a ${intruso?.usuario?.nombre} (${intruso?.usuario?.rol})`);
+    }
+  });
+  await paso('Tampoco se puede reportar a alguien del personal por la API', async () => {
+    const usuarios = await get(ADMIN, '/admin/usuarios');
+    const juridica = usuarios.find((u) => u.correo === JUR);
+    cierto(juridica?.colaborador?.id, 'la usuaria de Jurídica no tiene datos laborales para probar');
+    await llamar(AUX, 'POST', '/incapacidades', { body: { colaborador_id: juridica.colaborador.id, tipo: 'ENFERMEDAD_GENERAL', entidad_id: entidad('Sanitas').id, fecha_inicio: '2026-11-20', dias: 2, confirmar_no_prorroga: true }, esperado: 422 });
+  });
 });
 
 // =====================================================================
