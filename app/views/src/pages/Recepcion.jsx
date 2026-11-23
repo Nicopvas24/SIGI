@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, FileText, FolderOpen, Sparkles, Upload, Pencil, Trash2 } from 'lucide-react';
 import { api, abrirDocumento, formulario, sesion } from '../api.js';
 import BuscadorColaborador from '../components/BuscadorColaborador.jsx';
+import MisIncapacidades from '../components/MisIncapacidades.jsx';
 import {
   ARCHIVOS_ACEPTADOS, Aviso, DOCUMENTOS, Encabezado, Estado, Panel, TIPOS, Vacio,
   documento, documentosRequeridos, fecha, tipo, useDialogo, useIA,
@@ -243,16 +244,13 @@ export default function Recepcion() {
   }
 
   const puedeAdjuntar = (c) => ABIERTOS_A_SOPORTES.includes(c.estado) && (gestiona || c.colaborador?.usuario?.id === usuario?.id || rol === 'LIDER');
-  const incompletos = (casos || []).filter((c) => c.estado === 'DOCUMENTACION_INCOMPLETA');
 
   return (
     <div>
       <Encabezado titulo="Reporte y recepción"
-        descripcion={esColaborador ? 'Informe su incapacidad o licencia y adjunte los soportes.' : 'Registre incapacidades, adjunte soportes y deje constancia de su recepción.'} />
+        descripcion={esColaborador ? 'Consulte en qué va cada incapacidad, informe una nueva y adjunte los soportes.' : 'Registre incapacidades, adjunte soportes y deje constancia de su recepción.'} />
       <Aviso msj={msj} onCerrar={() => setMsj(null)} />
-      {esColaborador && incompletos.length > 0 && (
-        <Aviso msj={{ t: 'info', m: `Tiene ${incompletos.length} caso(s) con soportes pendientes. Adjúntelos desde la tabla de abajo.` }} />
-      )}
+      {esColaborador && <MisIncapacidades casos={casos} onAdjuntar={remitir} />}
 
       <Panel titulo="Informar incapacidad" sub="Si las fechas se cruzan con un caso existente, el sistema le preguntará si es una prórroga.">
         {iaActiva !== false && (
@@ -346,7 +344,7 @@ export default function Recepcion() {
       </Panel>
 
       <Panel
-        titulo={esColaborador ? 'Mis incapacidades' : rol === 'LIDER' ? 'Incapacidades de mi equipo' : 'Incapacidades'}
+        titulo={esColaborador ? 'Historial de mis incapacidades' : rol === 'LIDER' ? 'Incapacidades de mi equipo' : 'Incapacidades'}
         sub={casos ? `${visibles.length} caso(s)${verCerrados ? '' : ' abiertos'}` : 'Cargando…'}
         extra={<label className="opcion-check" style={{ minHeight: 30 }}>
           <input type="checkbox" checked={verCerrados} onChange={(e) => setVerCerrados(e.target.checked)} />Incluir archivados

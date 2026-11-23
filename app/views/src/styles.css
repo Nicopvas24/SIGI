@@ -83,13 +83,26 @@ p { margin: 0; }
   background: var(--tinta-900);
   color: var(--tinta-200);
   padding: 20px 12px 16px;
+  overflow: hidden; /* el scroll lo tiene la lista de módulos, no toda la barra */
 }
+.sidebar-cabeza { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-shrink: 0; }
+.boton-menu { display: none; }
 .marca { display: flex; align-items: center; padding: 2px 8px 22px; }
 /* Logotipo: mínimo 160 px de ancho; en la barra lateral cabe a 200 px */
 .marca img { display: block; width: 200px; max-width: 100%; height: auto; }
 .ingreso-marca .marca img { width: 221px; }
 
-.nav { display: flex; flex-direction: column; gap: 2px; }
+/* La lista de módulos ocupa el espacio libre y se desplaza sola; el pie (usuario, salir) queda siempre visible */
+.nav {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 14px;
+  margin: 0 -6px; padding: 0 6px 10px;
+  scrollbar-color: var(--tinta-700) transparent;
+}
+.nav::-webkit-scrollbar { width: 6px; }
+.nav::-webkit-scrollbar-thumb { background: var(--tinta-700); border-radius: 3px; }
+.nav-grupo { display: flex; flex-direction: column; gap: 2px; }
+.nav-titulo { padding: 0 10px 4px; font-size: 11px; font-weight: 620; font-stretch: 88%; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(185, 174, 224, 0.72); }
 .nav a {
   display: flex; align-items: center; gap: 10px;
   min-height: 38px; padding: 8px 10px; border-radius: var(--radio);
@@ -101,7 +114,7 @@ p { margin: 0; }
 .nav a.activo { background: var(--tinta-700); color: #fff; font-weight: 600; }
 .nav a.activo svg { color: var(--resaltador); }
 
-.sidebar-pie { margin-top: auto; display: flex; flex-direction: column; gap: 12px; padding: 0 4px; }
+.sidebar-pie { flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; padding: 10px 4px 0; border-top: 1px solid rgba(255, 255, 255, 0.06); }
 .estado-ia {
   display: flex; align-items: center; gap: 8px;
   font-size: 12px; color: var(--tinta-300); padding: 0 6px;
@@ -125,6 +138,16 @@ p { margin: 0; }
 .boton-icono-oscuro:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
 
 .contenido { padding: 28px 36px 56px; max-width: 1320px; width: 100%; }
+
+@media (min-width: 961px) and (max-height: 800px) {
+  .sidebar { padding-top: 14px; padding-bottom: 12px; }
+  .marca { padding-bottom: 12px; }
+  .marca img { width: 180px; }
+  .nav { gap: 8px; }
+  .nav a { min-height: 32px; padding: 6px 10px; font-size: 13.5px; }
+  .nav-titulo { padding-bottom: 2px; }
+  .sidebar-pie { gap: 8px; }
+}
 
 /* ---------- Encabezado de página ---------- */
 .encabezado { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
@@ -415,7 +438,7 @@ dialog.dialogo::backdrop { background: rgba(22, 15, 43, 0.42); }
 
 /* ---------- Complementos ---------- */
 /* Insignia de notificaciones sin leer en el menú */
-.nav a .insignia {
+.nav a .insignia, .boton-menu .insignia {
   margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
   display: inline-grid; place-items: center;
   background: var(--resaltador); color: var(--tinta-950); font-size: 11.5px; font-weight: 700;
@@ -453,12 +476,20 @@ dialog.dialogo form { max-height: calc(100vh - 34px); }
 /* ---------- Responsive ---------- */
 @media (max-width: 960px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
-  .sidebar { position: static; height: auto; padding: 12px 12px 8px; }
-  .marca { padding-bottom: 10px; }
-  .nav { flex-direction: row; overflow-x: auto; padding-bottom: 6px; }
-  .nav a { white-space: nowrap; }
-  .sidebar-pie { flex-direction: row; align-items: center; justify-content: space-between; margin-top: 8px; }
-  .usuario { border-top: 0; padding-top: 0; }
+  .sidebar { position: sticky; top: 0; z-index: 30; height: auto; padding: 10px 14px; overflow: visible; box-shadow: 0 2px 10px rgba(22, 15, 43, 0.25); }
+  .marca { padding: 0; }
+  .marca img { width: 170px; }
+  .boton-menu {
+    display: inline-flex; align-items: center; gap: 6px; position: relative;
+    min-height: 40px; padding: 0 12px; border-radius: var(--radio);
+    background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); color: #fff; font-weight: 600;
+  }
+  .boton-menu:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.24); }
+  .boton-menu .insignia { position: absolute; top: -9px; right: -9px; margin: 0; box-shadow: 0 0 0 2px var(--tinta-900); }
+  .nav, .sidebar-pie { display: none; }
+  .sidebar.abierto .nav { display: flex; margin-top: 12px; max-height: calc(100vh - 170px); }
+  .sidebar.abierto .nav a { min-height: 44px; }
+  .sidebar.abierto .sidebar-pie { display: flex; padding-bottom: 4px; }
   .contenido { padding: 20px 16px 40px; }
   .tabla-wrap table { min-width: 760px; }
   td .acciones { flex-wrap: nowrap; }
@@ -535,3 +566,57 @@ tr.fila-editando, tr.fila-editando:hover { background: var(--sello-claro); }
 .campo-dinero { position: relative; display: flex; align-items: center; }
 .campo-dinero > span { position: absolute; left: 11px; color: var(--texto-3); font-weight: 560; pointer-events: none; }
 .campo-dinero input { padding-left: 24px; font-variant-numeric: tabular-nums; }
+
+/* ---------- Mis incapacidades (inicio del colaborador) ---------- */
+.mis-casos { margin-bottom: 22px; }
+.mis-casos-cabeza { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; margin-bottom: 12px; }
+.mis-casos-cabeza h2 { font-size: 18px; font-weight: 680; }
+.mis-casos-resumen { display: flex; flex-wrap: wrap; gap: 6px; }
+.resumen-pastilla { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px; border-radius: 999px; font-size: 13px; font-weight: 520; border: 1px solid var(--borde); background: var(--superficie); color: var(--texto-2); }
+.resumen-pastilla b { font-size: 14px; font-weight: 720; color: var(--texto); }
+.resumen-pastilla.accion { background: var(--resaltador-suave); border-color: #EAD57A; color: var(--resaltador-texto); }
+.resumen-pastilla.pagada { background: var(--verde-claro); border-color: var(--verde-borde); color: var(--verde); }
+.mis-casos-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.mis-casos-vacio { padding: 16px 18px; border: 1px dashed var(--borde-fuerte); border-radius: var(--radio-panel); color: var(--texto-2); background: var(--superficie); }
+
+.mi-caso {
+  --tono: var(--sello); --tono-fondo: var(--superficie); --tono-borde: var(--borde); --tono-icono: var(--sello-claro);
+  border: 1px solid var(--tono-borde); border-radius: var(--radio-panel);
+  background: var(--tono-fondo); box-shadow: var(--sombra-panel); padding: 16px 18px;
+}
+.mi-caso.accion { --tono: var(--resaltador-texto); --tono-fondo: #FFFCEB; --tono-borde: #EAD57A; --tono-icono: var(--resaltador); }
+.mi-caso.pagada { --tono: var(--verde); --tono-fondo: #F3FBF6; --tono-borde: var(--verde-borde); --tono-icono: var(--verde-claro); }
+.mi-caso.cerrada { --tono: var(--texto-2); --tono-icono: var(--superficie-2); }
+.mi-caso-estado { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.mi-caso-icono { display: grid; place-items: center; flex-shrink: 0; width: 48px; height: 48px; border-radius: 50%; background: var(--tono-icono); color: var(--tono); }
+.mi-caso.pagada .mi-caso-icono { background: var(--verde); color: #fff; }
+.mi-caso-texto { flex: 1 1 260px; min-width: 0; }
+.mi-caso-titulo { font-size: 20px; font-weight: 720; letter-spacing: -0.01em; line-height: 1.2; color: var(--tono); }
+.mi-caso.proceso .mi-caso-titulo { color: var(--tinta-800); }
+.mi-caso-mensaje { margin-top: 3px; font-size: 14px; color: var(--texto-2); max-width: 68ch; }
+.mi-caso-valor { display: flex; flex-direction: column; align-items: flex-end; }
+.mi-caso-valor span { font-size: 12px; color: var(--texto-2); }
+.mi-caso-valor b { font-size: 20px; font-weight: 720; color: var(--verde); }
+.mi-caso-boton { min-height: 40px; padding: 0 16px; font-size: 14px; }
+.mi-caso-datos { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--tono-borde); font-size: 13px; color: var(--texto-2); }
+.mi-caso-datos span { display: inline-flex; align-items: center; gap: 5px; }
+
+/* Línea de avance */
+.mi-caso-pasos { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.mi-caso-pasos li { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; font-size: 12px; color: var(--texto-3); }
+.mi-caso-pasos li::before { content: ''; position: absolute; top: 7px; right: 50%; width: 100%; height: 2px; background: var(--borde-fuerte); }
+.mi-caso-pasos li:first-child::before { display: none; }
+.mi-caso-pasos .punto { position: relative; z-index: 1; width: 16px; height: 16px; border-radius: 50%; background: var(--superficie); border: 2px solid var(--borde-fuerte); }
+.mi-caso-pasos li.hecho, .mi-caso-pasos li.actual { color: var(--texto); }
+.mi-caso-pasos li.hecho::before, .mi-caso-pasos li.actual::before { background: var(--tono); }
+.mi-caso-pasos li.hecho .punto { background: var(--tono); border-color: var(--tono); }
+.mi-caso-pasos li.actual .punto { border-color: var(--tono); box-shadow: 0 0 0 4px var(--tono-icono); background: var(--superficie); }
+.mi-caso.pagada .mi-caso-pasos li.actual .punto { background: var(--tono); }
+.mi-caso-pasos li.actual .nombre { font-weight: 650; }
+@media (max-width: 640px) {
+  .mi-caso-pasos { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .mi-caso-pasos li { flex-direction: row; text-align: left; gap: 10px; }
+  .mi-caso-pasos li::before { top: auto; bottom: 50%; right: auto; left: 7px; width: 2px; height: calc(100% + 8px); }
+  .mi-caso-valor { align-items: flex-start; }
+  .mi-caso-boton { width: 100%; }
+}
