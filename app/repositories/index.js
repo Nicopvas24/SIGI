@@ -8,7 +8,6 @@ export const repoColaboradores = new BaseRepository('colaboradores');
 export const repoIncapacidades = new BaseRepository('incapacidades');
 export const repoDocumentos = new BaseRepository('documentos_soporte');
 export const repoRecepciones = new BaseRepository('recepciones');
-export const repoReemplazos = new BaseRepository('reemplazos');
 export const repoFormatos = new BaseRepository('formatos_seguimiento');
 export const repoGestiones = new BaseRepository('gestiones');
 export const repoEvidencias = new BaseRepository('evidencias');
@@ -58,7 +57,7 @@ export async function listarIncapacidades(filtros = {}) {
 
 // ---------- Colaboradores ----------
 export const SELECT_COLABORADOR = `
-  id, cargo, area, ibc, lider_id, usuario_id,
+  id, cargo, area, ibc, usuario_id,
   usuario:usuarios!usuario_id(id, nombre, documento, correo, rol),
   eps:entidades!entidad_eps_id(id, nombre),
   arl:entidades!entidad_arl_id(id, nombre)
@@ -67,10 +66,8 @@ export const SELECT_COLABORADOR = `
 /** El personal que opera la plataforma (recepción, auxiliar, jurídica...) no se reporta como incapacitado. */
 export const esColaboradorReportable = (c) => c?.usuario?.rol === 'COLABORADOR';
 
-export async function listarColaboradores({ liderId, soloReportables = false } = {}) {
-  let q = supabase.from('colaboradores').select(SELECT_COLABORADOR);
-  if (liderId) q = q.eq('lider_id', liderId);
-  const { data, error } = await q;
+export async function listarColaboradores({ soloReportables = false } = {}) {
+  const { data, error } = await supabase.from('colaboradores').select(SELECT_COLABORADOR);
   if (error) throw new Error(error.message);
   return (soloReportables ? data.filter(esColaboradorReportable) : data)
     .sort((a, b) => (a.usuario?.nombre || '').localeCompare(b.usuario?.nombre || ''));

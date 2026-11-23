@@ -60,7 +60,6 @@ export function fecha(v) {
 
 export const ROLES = {
   COLABORADOR: 'Colaborador',
-  LIDER: 'Líder de área',
   RECEPCIONISTA: 'Recepción',
   AUXILIAR: 'Auxiliar de personal',
   JURIDICA: 'Área jurídica',

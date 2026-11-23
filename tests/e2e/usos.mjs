@@ -36,7 +36,6 @@ const MENU_TEXTO = {
 const TODAS = Object.keys(TITULOS);
 const ROLES = [
   { correo: 'colaborador@sigi.demo', rol: 'Colaborador', inicio: '/recepcion', vistas: ['/recepcion', '/notificaciones'] },
-  { correo: 'lider@sigi.demo', rol: 'Líder', inicio: '/recepcion', vistas: ['/recepcion', '/colaboradores', '/notificaciones'] },
   { correo: 'recepcion@sigi.demo', rol: 'Recepción', inicio: '/recepcion', vistas: ['/recepcion', '/notificaciones'] },
   { correo: 'auxiliar@sigi.demo', rol: 'Auxiliar', inicio: '/monitoreo',
     vistas: ['/monitoreo', '/recepcion', '/verificacion', '/transcripcion', '/cobro', '/juridico', '/conciliacion', '/archivo', '/colaboradores', '/notificaciones'] },

@@ -178,31 +178,11 @@ export default function Recepcion() {
     } catch (e) { setMsj({ t: 'error', m: e.message }); }
   }
 
-  async function reemplazo(caso) {
-    const opciones = colaboradores.filter((c) => c.id !== caso.colaborador_id).map((c) => [c.id, `${c.usuario?.nombre} · ${c.cargo || c.area || ''}`]);
-    const r0 = await dlg.pedir({
-      titulo: `Asignar reemplazo para el caso ${caso.numero_caso}`,
-      descripcion: `${caso.colaborador?.usuario?.nombre} estará ausente del ${fecha(caso.fecha_inicio)} al ${fecha(caso.fecha_fin)}.`,
-      textoAceptar: 'Registrar',
-      campos: [
-        { nombre: 'reemplazo_id', etiqueta: 'Reemplazo', tipo: 'select', opciones, vacio: 'Sin reemplazo disponible' },
-        { nombre: 'fecha_inicio', etiqueta: 'Desde', tipo: 'date', valor: caso.fecha_inicio, requerido: true },
-        { nombre: 'fecha_fin', etiqueta: 'Hasta', tipo: 'date', valor: caso.fecha_fin, requerido: true },
-        { nombre: 'justificacion', etiqueta: 'Justificación', tipo: 'textarea', ayuda: 'Obligatoria si no hay reemplazo.' },
-      ],
-    });
-    if (!r0) return;
-    try {
-      const r = await api(`/incapacidades/${caso.id}/reemplazo`, { method: 'POST', body: { ...r0, reemplazo_id: r0.reemplazo_id || null } });
-      setMsj({ t: 'ok', m: r.mensaje });
-    } catch (e) { setMsj({ t: 'error', m: e.message }); }
-  }
-
   async function ver(d) {
     try { await abrirDocumento(d.id); } catch (e) { setMsj({ t: 'error', m: e.message }); }
   }
 
-  // Modificar o eliminar: Gestión Humana hasta antes de verificar; colaborador y líder solo antes de la recepción
+  // Modificar o eliminar: Gestión Humana hasta antes de verificar; el colaborador solo antes de la recepción
   const puedeEditar = (c) => (gestiona ? EDITABLES : EDITABLES_COLABORADOR).includes(c.estado);
 
   async function modificar(caso) {
@@ -243,7 +223,7 @@ export default function Recepcion() {
     } catch (e) { setMsj({ t: 'error', m: e.message }); }
   }
 
-  const puedeAdjuntar = (c) => ABIERTOS_A_SOPORTES.includes(c.estado) && (gestiona || c.colaborador?.usuario?.id === usuario?.id || rol === 'LIDER');
+  const puedeAdjuntar = (c) => ABIERTOS_A_SOPORTES.includes(c.estado) && (gestiona || c.colaborador?.usuario?.id === usuario?.id);
 
   return (
     <div>
@@ -344,7 +324,7 @@ export default function Recepcion() {
       </Panel>
 
       <Panel
-        titulo={esColaborador ? 'Historial de mis incapacidades' : rol === 'LIDER' ? 'Incapacidades de mi equipo' : 'Incapacidades'}
+        titulo={esColaborador ? 'Historial de mis incapacidades' : 'Incapacidades'}
         sub={casos ? `${visibles.length} caso(s)${verCerrados ? '' : ' abiertos'}` : 'Cargando…'}
         extra={<label className="opcion-check" style={{ minHeight: 30 }}>
           <input type="checkbox" checked={verCerrados} onChange={(e) => setVerCerrados(e.target.checked)} />Incluir archivados
@@ -377,7 +357,7 @@ export default function Recepcion() {
                         <td><Estado valor={c.estado} />{c.extemporanea && <span className="secundario-texto texto-alerta">Extemporánea</span>}</td>
                         <td>
                           <div className="acciones">
-                            {rol === 'LIDER' && !CERRADOS.includes(c.estado) && <button className="secundario" onClick={() => reemplazo(c)}>Reemplazo</button>}
+                            
                             {gestiona && ['REPORTADA', 'DOCUMENTACION_REMITIDA'].includes(c.estado) && <button className="secundario" onClick={() => recibir(c)}>Registrar recepción</button>}
                             {puedeAdjuntar(c) && <button onClick={() => remitir(c)}>Adjuntar soportes</button>}
                             {puedeEditar(c) && <>

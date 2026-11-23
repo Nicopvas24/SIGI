@@ -12,15 +12,13 @@ insert into usuarios (documento, nombre, correo, rol) values
   ('1012', 'Santiago Herrera',     'santiago.herrera@sigi.demo','COLABORADOR')
 on conflict (documento) do nothing;
 
-insert into colaboradores (usuario_id, cargo, area, ibc, entidad_eps_id, entidad_arl_id, lider_id)
+insert into colaboradores (usuario_id, cargo, area, ibc, entidad_eps_id, entidad_arl_id)
 select u.id,
        d.cargo, d.area, d.ibc,
        (select id from entidades where nombre = d.eps),
-       (select id from entidades where nombre = 'ARL SURA'),
-       case when u.documento = '1002' then null else (select id from usuarios where documento = '1002') end
+       (select id from entidades where nombre = 'ARL SURA')
 from usuarios u
 join (values
-  ('1002', 'Líder de operaciones',      'Operaciones',     4800000, 'Nueva EPS'),
   ('1003', 'Recepcionista',             'Administrativa',  1600000, 'Salud Total'),
   ('1004', 'Auxiliar de personal',      'Gestión Humana',  2200000, 'SURA EPS'),
   ('1005', 'Abogada',                   'Jurídica',        5200000, 'Sanitas'),

@@ -79,7 +79,7 @@ export default function Colaboradores() {
             </table>
           </div>
         ) : lista && (
-          <Vacio icono={Users} titulo="No hay colaboradores">{filtro ? 'Ningún colaborador coincide con la búsqueda.' : 'No hay colaboradores registrados en su equipo.'}</Vacio>
+          <Vacio icono={Users} titulo="No hay colaboradores">{filtro ? 'Ningún colaborador coincide con la búsqueda.' : 'No hay colaboradores registrados.'}</Vacio>
         )}
       </Panel>
 

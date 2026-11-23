@@ -16,12 +16,11 @@ insert into usuarios (documento, nombre, correo, rol) values
   ('1089912346', 'Camilo Andrés Bedoya',     'camilo.bedoya@sigi.demo',    'COLABORADOR')
 on conflict (documento) do nothing;
 
-insert into colaboradores (usuario_id, cargo, area, ibc, entidad_eps_id, entidad_arl_id, lider_id)
+insert into colaboradores (usuario_id, cargo, area, ibc, entidad_eps_id, entidad_arl_id)
 select u.id,
        d.cargo, d.area, d.ibc,
        (select id from entidades where nombre = d.eps),
-       (select id from entidades where nombre = 'ARL SURA'),
-       (select id from usuarios where correo = 'lider@sigi.demo')
+       (select id from entidades where nombre = 'ARL SURA')
 from usuarios u
 join (values
   ('1088245671', 'Asesora de ventas',              'Comercial',          1900000, 'SURA EPS'),

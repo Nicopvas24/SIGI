@@ -4,7 +4,7 @@ import { ReglasIncapacidadService } from '../services/ReglasIncapacidadService.j
 import { NotificacionService } from '../services/NotificacionService.js';
 import {
   repoIncapacidades, registrarBitacora, incapacidadCompleta,
-  listarColaboradores, colaboradorDeUsuario,
+  colaboradorDeUsuario,
 } from '../repositories/index.js';
 
 export function errorHttp(mensaje, status = 400) {
@@ -46,18 +46,13 @@ export async function casoOError(id, estadosPermitidos, accion = 'esta acción')
 }
 
 /**
- * Colaboradores que el usuario puede ver: el colaborador solo a sí mismo, el líder
- * a su equipo (y a sí mismo). El resto de roles ve todos (devuelve null).
+ * Colaboradores que el usuario puede ver: el colaborador solo a sí mismo.
+ * El resto de roles ve todos (devuelve null).
  */
 export async function alcanceColaboradores(usuario) {
   if (usuario.rol === 'COLABORADOR') {
     const propio = await colaboradorDeUsuario(usuario.id);
     return propio ? [propio.id] : [];
-  }
-  if (usuario.rol === 'LIDER') {
-    const equipo = await listarColaboradores({ liderId: usuario.id });
-    const propio = await colaboradorDeUsuario(usuario.id);
-    return [...equipo.map((c) => c.id), ...(propio ? [propio.id] : [])];
   }
   return null;
 }

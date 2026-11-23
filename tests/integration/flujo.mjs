@@ -83,9 +83,9 @@ async function escenarioDe(nombre, fn) {
 
 // ---------- Datos de referencia ----------
 const AUX = 'auxiliar@sigi.demo', REC = 'recepcion@sigi.demo', CONT = 'contabilidad@sigi.demo';
-const JUR = 'juridica@sigi.demo', DOCU = 'documental@sigi.demo', ADMIN = 'admin@sigi.demo', LIDER = 'lider@sigi.demo';
+const JUR = 'juridica@sigi.demo', DOCU = 'documental@sigi.demo', ADMIN = 'admin@sigi.demo';
 const CARLOS = 'colaborador@sigi.demo', JORGE = 'jorge.castano@sigi.demo', LUIS = 'luis.montoya@sigi.demo';
-const PERSONAL = [AUX, REC, CONT, JUR, DOCU, ADMIN, LIDER];
+const PERSONAL = [AUX, REC, CONT, JUR, DOCU, ADMIN];
 
 const colaboradores = await get(ADMIN, '/colaboradores');
 const entidades = await get(ADMIN, '/entidades');
@@ -172,7 +172,7 @@ await escenarioDe('1. Enfermedad general de Carlos: del reporte al archivo', asy
 });
 
 // =====================================================================
-await escenarioDe('2. Prórroga de Carlos y reemplazo asignado por la líder', async () => {
+await escenarioDe('2. Prórroga de Carlos', async () => {
   const base = globalThis.casoCarlos;
   cierto(base, 'requiere el caso del escenario 1');
   const salud = entidad('Salud Total');
@@ -184,7 +184,6 @@ await escenarioDe('2. Prórroga de Carlos y reemplazo asignado por la líder', a
   const { caso: p } = await paso('Se registra como prórroga', () => post(CARLOS, '/incapacidades', { ...datos, prorroga_de: base.id }));
   await paso('Adjunta el certificado de prórroga', () =>
     post(CARLOS, `/incapacidades/${p.id}/documentos`, {}, { archivos: { CERTIFICADO: doc('06_prorroga_carlos/certificado_prorroga.pdf'), EPICRISIS: doc('06_prorroga_carlos/epicrisis.pdf') } }));
-  await paso('La líder asigna el reemplazo', () => post(LIDER, `/incapacidades/${p.id}/reemplazo`, { justificacion: 'Reemplazo interno del área' }));
   await paso('El historial del colaborador suma los días de la prórroga', async () => {
     const h = await get(AUX, `/monitoreo/colaboradores/${colab(CARLOS).id}`);
     cierto(JSON.stringify(h).includes(p.numero_caso), 'la prórroga no aparece en el historial');
@@ -358,7 +357,7 @@ await escenarioDe('7. Modificar y eliminar una incapacidad', async () => {
 // =====================================================================
 await escenarioDe('7b. El personal de la plataforma no se reporta como incapacitado', async () => {
   await paso('La lista para reportar solo trae usuarios con rol Colaborador', async () => {
-    for (const quien of [ADMIN, REC, AUX, LIDER]) {
+    for (const quien of [ADMIN, REC, AUX]) {
       const lista = await get(quien, '/colaboradores');
       cierto(lista.length > 0, `${quien} no ve colaboradores`);
       const intruso = lista.find((x) => x.usuario?.rol !== 'COLABORADOR' || PERSONAL.includes(x.usuario?.correo));
@@ -384,7 +383,10 @@ await escenarioDe('8. Reportes y consultas', async () => {
     const propios = await get(CARLOS, '/incapacidades');
     cierto(propios.length > 0 && propios.every((x) => x.colaborador?.usuario?.correo === CARLOS), 've casos de otros');
   });
-  await paso('La líder ve los casos de su equipo', async () => cierto((await get(LIDER, '/incapacidades')).length > 0, 'no ve casos'));
+  await paso('El rol Líder de área ya no existe', async () => {
+    const r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ correo: 'lider@sigi.demo', password: CLAVE }) });
+    cierto(!r.ok, 'lider@sigi.demo todavía puede ingresar');
+  });
 });
 
 // =====================================================================

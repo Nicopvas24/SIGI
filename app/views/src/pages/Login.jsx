@@ -6,7 +6,7 @@ import { Marca } from '../layouts/Layout.jsx';
 
 const DEMOS = [
   ['auxiliar@sigi.demo', 'Auxiliar de personal'], ['colaborador@sigi.demo', 'Colaborador'],
-  ['lider@sigi.demo', 'Líder de área'], ['recepcion@sigi.demo', 'Recepción'],
+  ['recepcion@sigi.demo', 'Recepción'],
   ['juridica@sigi.demo', 'Área jurídica'], ['contabilidad@sigi.demo', 'Contabilidad'],
   ['documental@sigi.demo', 'Gestión documental'], ['admin@sigi.demo', 'Administración'],
 ];

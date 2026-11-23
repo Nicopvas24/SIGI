@@ -7,14 +7,14 @@ import { ROLES, iniciales, useIA } from '../ui.jsx';
 // Menú por rol, agrupado por etapa del proceso
 const MENU = [
   { ruta: '/monitoreo', texto: 'Monitoreo', icono: Activity, grupo: 'Trámite', roles: ['AUXILIAR', 'ADMIN'] },
-  { ruta: '/recepcion', texto: 'Reporte y recepción', icono: FileInput, grupo: 'Trámite', roles: ['COLABORADOR', 'LIDER', 'RECEPCIONISTA', 'AUXILIAR', 'ADMIN'] },
+  { ruta: '/recepcion', texto: 'Reporte y recepción', icono: FileInput, grupo: 'Trámite', roles: ['COLABORADOR', 'RECEPCIONISTA', 'AUXILIAR', 'ADMIN'] },
   { ruta: '/verificacion', texto: 'Verificación', icono: FileCheck2, grupo: 'Trámite', roles: ['AUXILIAR', 'ADMIN'] },
   { ruta: '/transcripcion', texto: 'Transcripción y radicación', icono: Stamp, grupo: 'Trámite', roles: ['AUXILIAR', 'ADMIN'] },
   { ruta: '/cobro', texto: 'Cobro', icono: Wallet, grupo: 'Cobro y pagos', roles: ['AUXILIAR', 'CONTABILIDAD', 'ADMIN'] },
   { ruta: '/juridico', texto: 'Cobro jurídico', icono: Gavel, grupo: 'Cobro y pagos', roles: ['JURIDICA', 'AUXILIAR', 'ADMIN'] },
   { ruta: '/conciliacion', texto: 'Conciliación', icono: ArrowLeftRight, grupo: 'Cobro y pagos', roles: ['CONTABILIDAD', 'AUXILIAR', 'ADMIN'] },
   { ruta: '/archivo', texto: 'Archivo', icono: Archive, grupo: 'Cobro y pagos', roles: ['AUXILIAR', 'GESTION_DOCUMENTAL', 'ADMIN'] },
-  { ruta: '/colaboradores', texto: 'Colaboradores', icono: Users, grupo: 'Personas', roles: ['AUXILIAR', 'LIDER', 'ADMIN'] },
+  { ruta: '/colaboradores', texto: 'Colaboradores', icono: Users, grupo: 'Personas', roles: ['AUXILIAR', 'ADMIN'] },
   { ruta: '/usuarios', texto: 'Usuarios', icono: UserCog, grupo: 'Personas', roles: ['ADMIN'] },
 ];
 

@@ -8,7 +8,7 @@ import { asyncHandler, errorHttp } from './_helpers.js';
 import { olvidarUsuarios } from '../middleware/auth.js';
 
 const ROLES = Object.values(Roles);
-const SELECT = `*, colaborador:colaboradores!usuario_id(id, cargo, area, ibc, entidad_eps_id, entidad_arl_id, lider_id)`;
+const SELECT = `*, colaborador:colaboradores!usuario_id(id, cargo, area, ibc, entidad_eps_id, entidad_arl_id)`;
 const correoValido = (c) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c);
 const uno = (v) => (Array.isArray(v) ? v[0] || null : v || null);
 
@@ -56,7 +56,6 @@ function leerDatos(body, { parcial = false } = {}) {
         ibc,
         entidad_eps_id: id(c.entidad_eps_id) && Number(c.entidad_eps_id),
         entidad_arl_id: id(c.entidad_arl_id) && Number(c.entidad_arl_id),
-        lider_id: id(c.lider_id),
       };
     }
   }
@@ -70,11 +69,9 @@ const REFERENCIAS_USUARIO = [
   ['gestiones', 'responsable_id', 'gestiones ante entidades'],
   ['evidencias', 'usuario_id', 'evidencias cargadas'],
   ['procesos_juridicos', 'abogado_id', 'procesos jurídicos'],
-  ['colaboradores', 'lider_id', 'colaboradores a cargo'],
 ];
 const REFERENCIAS_COLABORADOR = [
   ['incapacidades', 'colaborador_id', 'incapacidades'],
-  ['reemplazos', 'reemplazo_id', 'reemplazos asignados'],
 ];
 
 async function contar(tabla, columna, valor) {
@@ -167,7 +164,7 @@ export const UsuarioController = {
         else await repoColaboradores.crear({ usuario_id: actual.id, ...d.colaborador });
       } else if (d.colaborador === null && actual.colaborador) {
         const usos = await Promise.all(REFERENCIAS_COLABORADOR.map(([t, c]) => contar(t, c, actual.colaborador.id)));
-        if (usos.some((k) => k > 0)) throw errorHttp('No se pueden quitar los datos laborales: el colaborador tiene incapacidades o reemplazos registrados.', 409);
+        if (usos.some((k) => k > 0)) throw errorHttp('No se pueden quitar los datos laborales: el colaborador tiene incapacidades registradas.', 409);
         await repoColaboradores.eliminar(actual.colaborador.id);
       }
     } catch (e) { throw traducirError(e); }

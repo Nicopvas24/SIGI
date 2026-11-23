@@ -7,7 +7,7 @@ import { Aviso, Encabezado, InputDinero, Panel, ROLES, Vacio, useDialogo } from 
 const PUEDE_SER_COLABORADOR = ['COLABORADOR'];
 const VACIO = {
   nombre: '', documento: '', correo: '', rol: 'COLABORADOR', password: '', activo: true,
-  esColaborador: true, cargo: '', area: '', ibc: '', entidad_eps_id: '', entidad_arl_id: '', lider_id: '',
+  esColaborador: true, cargo: '', area: '', ibc: '', entidad_eps_id: '', entidad_arl_id: '',
 };
 const sinTildes = (t = '') => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
@@ -16,7 +16,7 @@ function aFormulario(u) {
   return {
     nombre: u.nombre, documento: u.documento, correo: u.correo, rol: u.rol, password: '', activo: u.activo !== false,
     esColaborador: Boolean(c), cargo: c?.cargo || '', area: c?.area || '', ibc: c?.ibc ?? '',
-    entidad_eps_id: c?.entidad_eps_id ?? '', entidad_arl_id: c?.entidad_arl_id ?? '', lider_id: c?.lider_id ?? '',
+    entidad_eps_id: c?.entidad_eps_id ?? '', entidad_arl_id: c?.entidad_arl_id ?? '',
   };
 }
 
@@ -37,7 +37,6 @@ export default function Usuarios() {
   useEffect(() => { cargar(); api('/entidades').then(setEntidades).catch(() => {}); }, []);
   useEffect(() => { if (editando) primerCampo.current?.focus(); }, [editando]);
 
-  const lideres = useMemo(() => (usuarios || []).filter((u) => u.rol === 'LIDER' && u.activo !== false), [usuarios]);
   const eps = entidades.filter((e) => e.tipo === 'EPS');
   const arl = entidades.filter((e) => e.tipo === 'ARL');
   // "EPS Sanitas" pero "SURA EPS" (sin repetir la sigla cuando el nombre ya la trae)
@@ -77,7 +76,7 @@ export default function Usuarios() {
     const cuerpo = {
       nombre: form.nombre, documento: form.documento, correo: form.correo, rol: form.rol, activo: form.activo,
       colaborador: form.esColaborador
-        ? { cargo: form.cargo, area: form.area, ibc: form.ibc, entidad_eps_id: form.entidad_eps_id, entidad_arl_id: form.entidad_arl_id, lider_id: form.lider_id }
+        ? { cargo: form.cargo, area: form.area, ibc: form.ibc, entidad_eps_id: form.entidad_eps_id, entidad_arl_id: form.entidad_arl_id }
         : null,
     };
     if (form.password) cuerpo.password = form.password;
@@ -202,13 +201,6 @@ export default function Usuarios() {
                 <select id="u-arl" value={form.entidad_arl_id} onChange={set('entidad_arl_id')}>
                   <option value="">Sin asignar</option>
                   {arl.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-                </select>
-              </div>
-              <div className="campo">
-                <label htmlFor="u-lider">Líder</label>
-                <select id="u-lider" value={form.lider_id} onChange={set('lider_id')}>
-                  <option value="">Sin líder</option>
-                  {lideres.filter((l) => l.id !== editando).map((l) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
                 </select>
               </div>
             </>}

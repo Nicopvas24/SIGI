@@ -187,18 +187,19 @@ def epicrisis(path, entidad, persona, ingreso, motivo, hallazgos, plan, dias, ci
 
 
 # ------------------------------------------------- modo: colaborador específico
-# Colaboradores de la base de prueba (seeders 001, 002 y 003): documento -> (nombre, EPS, IBC).
+# Colaboradores de la base de prueba (seeders 001 a 004): documento -> (nombre, EPS, IBC[, ARL si no es ARL SURA]).
 # Solo usuarios con rol Colaborador: al personal que opera SIGI no se le reportan incapacidades.
 SEMBRADOS = {
     '1001': ('Carlos Colaborador', 'Salud Total', 2500000),
     '1009': ('María Fernanda Ríos', 'Nueva EPS', 2100000), '1010': ('Jorge Iván Castaño', 'Salud Total', 1500000),
     '1011': ('Paula Andrea Gómez', 'Sanitas', 3000000), '1012': ('Santiago Herrera', 'SOS', 1800000),
     '1058078253': ('Juan Agudelo', 'Salud Total', 3200000),
-    '1088245671': ('Valentina Ospina Marín', 'SURA EPS', 1900000), '1093784512': ('Andrés Felipe Restrepo', 'Nueva EPS', 2400000),
+    '1088245671': ('Valentina Ospina Marín', 'SURA EPS', 1900000), '1093784512': ('Andrés Felipe Restrepo', 'Nueva EPS', 2400000, 'ARL Positiva'),
     '1087653298': ('Daniela Cardona Loaiza', 'Sanitas', 2800000), '1112459870': ('Luis Eduardo Montoya', 'Salud Total', 1500000),
-    '1094327765': ('Natalia Giraldo Toro', 'Famisanar', 2000000), '1089912346': ('Camilo Andrés Bedoya', 'SOS', 1600000),
+    '1094327765': ('Natalia Giraldo Toro', 'Famisanar', 2000000), '1089912346': ('Camilo Andrés Bedoya', 'Comfenalco Valle', 1600000),
 }
-ENCABEZADOS = {'Salud Total': 'SALUD TOTAL EPS-S', 'Sanitas': 'EPS SANITAS', 'SOS': 'EPS SOS', 'Asmet Salud': 'ASMET SALUD EPS'}
+ENCABEZADOS = {'Salud Total': 'SALUD TOTAL EPS-S', 'Sanitas': 'EPS SANITAS', 'SOS': 'EPS SOS', 'Asmet Salud': 'ASMET SALUD EPS',
+              'Comfenalco Valle': 'COMFENALCO VALLE EPS', 'Compensar': 'COMPENSAR EPS', 'ARL Positiva': 'POSITIVA COMPAÑÍA DE SEGUROS · ARL'}
 # tipo -> (origen, CIE-10, descripción, motivo, hallazgos, plan)
 CLINICA = {
     'ENFERMEDAD_GENERAL': ('Enfermedad general', 'J06.9', 'Infección aguda de las vías respiratorias superiores',
@@ -241,14 +242,15 @@ def documentos_exigidos(tipo, dias):
 
 def generar_colaborador(a):
     if a.documento in SEMBRADOS:
-        nombre_base, eps, ibc_base = SEMBRADOS[a.documento]
+        nombre_base, eps, ibc_base, *resto = SEMBRADOS[a.documento]
+        arl_base = resto[0] if resto else 'ARL SURA'
     else:
-        nombre_base, eps, ibc_base = None, None, None
+        nombre_base, eps, ibc_base, arl_base = None, None, None, 'ARL SURA'
     nombre = a.nombre or nombre_base
     if not nombre or not a.documento:
         sys.exit('Indique --documento de un colaborador de prueba (ver SEMBRADOS) o --nombre y --documento de otro colaborador.')
     tipo = a.tipo
-    entidad = a.entidad or ('ARL SURA' if tipo == 'ACCIDENTE_LABORAL' else eps)
+    entidad = a.entidad or (arl_base if tipo == 'ACCIDENTE_LABORAL' else eps)
     if not entidad:
         sys.exit(f'{nombre} no está en la lista de prueba: indique --entidad (por ejemplo "Nueva EPS").')
     ibc = a.ibc or ibc_base or 1500000

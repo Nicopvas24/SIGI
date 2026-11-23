@@ -39,7 +39,6 @@ rutas.post('/incapacidades', RecepcionController.informar);
 rutas.put('/incapacidades/:id', RecepcionController.modificar);
 rutas.delete('/incapacidades/:id', RecepcionController.eliminar);
 rutas.post('/incapacidades/:id/documentos', subir.any(), RecepcionController.remitirDocumentacion);
-rutas.post('/incapacidades/:id/reemplazo', permitirRoles('LIDER'), RecepcionController.asignarReemplazo);
 rutas.post('/incapacidades/:id/recibir', permitirRoles(...GESTION), RecepcionController.recibir);
 rutas.get('/documentos/:id/url', RecepcionController.verDocumento);
 rutas.post('/ia/leer-certificado', subir.single('archivo'), RecepcionController.leerCertificadoIA);
@@ -87,9 +86,9 @@ rutas.post('/conciliacion/cerrar', permitirRoles('CONTABILIDAD'), ConciliacionCo
 rutas.get('/monitoreo/reporte', permitirRoles(AUX), MonitoreoController.reporte);
 rutas.post('/incapacidades/:id/concepto-rehabilitacion', permitirRoles(AUX), MonitoreoController.conceptoRehabilitacion);
 rutas.post('/incapacidades/:id/suspension-nomina', permitirRoles(AUX), MonitoreoController.suspensionNomina);
-rutas.get('/monitoreo/colaboradores', permitirRoles(AUX, 'LIDER'), MonitoreoController.colaboradores);
-rutas.get('/monitoreo/colaboradores/:id', permitirRoles(AUX, 'LIDER'), MonitoreoController.historialColaborador);
-rutas.post('/ia/resumen-colaborador/:id', permitirRoles(AUX, 'LIDER'), MonitoreoController.resumenColaboradorIA);
+rutas.get('/monitoreo/colaboradores', permitirRoles(AUX), MonitoreoController.colaboradores);
+rutas.get('/monitoreo/colaboradores/:id', permitirRoles(AUX), MonitoreoController.historialColaborador);
+rutas.post('/ia/resumen-colaborador/:id', permitirRoles(AUX), MonitoreoController.resumenColaboradorIA);
 rutas.post('/ia/prediccion-180', permitirRoles(AUX), MonitoreoController.prediccionIA);
 
 // ---------- Archivo ----------

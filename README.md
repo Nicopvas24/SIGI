@@ -57,7 +57,7 @@ Los usuarios de prueba (`auxiliar@sigi.demo`, `colaborador@sigi.demo`, `juridica
 
 | Módulo | Qué hace | Controlador |
 |---|---|---|
-| Reporte y recepción | El colaborador o su líder informan la incapacidad (detecta prórrogas), se adjuntan los soportes y se registra su recepción. | `RecepcionController` |
+| Reporte y recepción | El colaborador informa su incapacidad, o Recepción o el auxiliar lo hacen por él, (detecta prórrogas), se adjuntan los soportes y se registra su recepción. | `RecepcionController` |
 | Verificación | Revisión de soportes, formato de seguimiento con la liquidación y aviso de documentos faltantes (3 días hábiles). | `VerificacionController` |
 | Transcripción y radicación | Trámite ante cada entidad con su plazo, evidencia obligatoria y reporte mensual de ausentismo al SG-SST. | `TranscripcionController` |
 | Cobro | Respuesta de la entidad, solicitud de pago, seguimiento, requerimientos y registro del pago. | `CobroController` |

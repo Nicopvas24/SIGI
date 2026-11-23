@@ -1,6 +1,6 @@
 // RecepcionController - Módulo "Reporte y recepción"
 import {
-  repoIncapacidades, repoEntidades, repoRecepciones, repoReemplazos, repoDocumentos,
+  repoIncapacidades, repoEntidades, repoRecepciones, repoDocumentos,
   listarIncapacidades, listarColaboradores, colaboradorPorId, colaboradorDeUsuario,
   registrarBitacora, esColaboradorReportable,
 } from '../repositories/index.js';
@@ -24,11 +24,11 @@ const TIPOS_NOVEDAD = ['ENFERMEDAD_GENERAL', 'ACCIDENTE_LABORAL', 'ACCIDENTE_TRA
 
 /** Valida que el usuario pueda modificar o eliminar el caso en su estado actual. */
 async function exigirEdicion(usuario, caso, accion) {
-  if (!['AUXILIAR', 'RECEPCIONISTA', 'ADMIN', 'LIDER', 'COLABORADOR'].includes(usuario.rol)) {
+  if (!['AUXILIAR', 'RECEPCIONISTA', 'ADMIN', 'COLABORADOR'].includes(usuario.rol)) {
     throw errorHttp(`Su rol no puede ${accion} incapacidades.`, 403);
   }
   await verificarAlcance(usuario, caso.colaborador_id);
-  const permitidos = ['COLABORADOR', 'LIDER'].includes(usuario.rol) ? ESTADOS_EDITABLES_COLABORADOR : ESTADOS_EDITABLES;
+  const permitidos = usuario.rol === 'COLABORADOR' ? ESTADOS_EDITABLES_COLABORADOR : ESTADOS_EDITABLES;
   if (!permitidos.includes(caso.estado)) {
     throw errorHttp(permitidos === ESTADOS_EDITABLES
       ? `El caso ${caso.numero_caso} ya fue verificado y no se puede ${accion}.`
@@ -118,7 +118,7 @@ export const RecepcionController = {
     if ((caso.pagos || []).length) throw errorHttp('No se puede eliminar un caso con pagos registrados.', 409);
 
     await DocumentoService.eliminarArchivos(caso.documentos.map((d) => d.url));
-    await repoIncapacidades.eliminar(caso.id); // soportes, recepciones y reemplazos se borran en cascada
+    await repoIncapacidades.eliminar(caso.id); // soportes y recepciones se borran en cascada
     registrarBitacora(req.usuario.id, 'ELIMINAR_INCAPACIDAD', {
       numero_caso: caso.numero_caso, colaborador: caso.colaborador?.usuario?.nombre, estado: caso.estado, motivo,
     });
@@ -143,20 +143,17 @@ export const RecepcionController = {
 
   // GET /api/colaboradores - a quién se le puede reportar una incapacidad.
   // Solo usuarios con rol Colaborador: el personal que opera la plataforma no aparece.
-  // El líder ve su equipo; el colaborador, solo su registro.
+  // El colaborador solo ve su propio registro.
   colaboradores: asyncHandler(async (req, res) => {
     if (req.usuario.rol === 'COLABORADOR') {
       const propio = await colaboradorDeUsuario(req.usuario.id);
       return res.json(propio ? [propio] : []);
     }
-    if (req.usuario.rol === 'LIDER') {
-      return res.json(await listarColaboradores({ liderId: req.usuario.id, soloReportables: true }));
-    }
     res.json(await listarColaboradores({ soloReportables: true }));
   }),
 
   /**
-   * Informar incapacidad. El colaborador reporta la suya; el líder, la
+   * Informar incapacidad. El colaborador reporta la suya; la
    * recepción o el auxiliar la pueden reportar en nombre de un colaborador.
    */
   informar: asyncHandler(async (req, res) => {
@@ -222,10 +219,6 @@ export const RecepcionController = {
       await NotificacionService.notificarUsuario(colaborador.usuario.id, `Incapacidad registrada · ${caso.numero_caso}`,
         `${req.usuario.nombre} registró su incapacidad de ${dias} día(s) desde ${fecha_inicio}. Entregue los soportes dentro de los 2 días siguientes.`);
     }
-    if (colaborador.lider_id && colaborador.lider_id !== req.usuario.id) {
-      await NotificacionService.notificarUsuario(colaborador.lider_id, `Nueva incapacidad ${caso.numero_caso}`,
-        `${nombre} reportó una incapacidad de ${dias} día(s) desde ${fecha_inicio}. Asigne el reemplazo.`);
-    }
     await notificarAuxiliares(`Nueva incapacidad ${caso.numero_caso}`,
       `${nombre}: ${dias} día(s) desde ${fecha_inicio}. Pendiente de soportes.`);
 
@@ -272,47 +265,6 @@ export const RecepcionController = {
       documentos_guardados: guardados, faltantes, extemporanea,
       mensaje: `${guardados.length} soporte(s) cargado(s). Recuerde entregar los originales en físico a Gestión Humana.`,
     });
-  }),
-
-  /**
-   * Asignar reemplazo (líder). Valida que el reemplazo no esté
-   * incapacitado ni asignado a otro reemplazo en esas fechas.
-   */
-  asignarReemplazo: asyncHandler(async (req, res) => {
-    const caso = await casoOError(req.params.id);
-    await verificarAlcance(req.usuario, caso.colaborador_id);
-    const { reemplazo_id, justificacion } = req.body;
-    const fecha_inicio = req.body.fecha_inicio || caso.fecha_inicio;
-    const fecha_fin = req.body.fecha_fin || caso.fecha_fin;
-    if (fecha_fin < fecha_inicio) throw errorHttp('La fecha final del reemplazo no puede ser anterior a la inicial.');
-
-    if (reemplazo_id) {
-      if (reemplazo_id === caso.colaborador_id) throw errorHttp('El reemplazo no puede ser el mismo colaborador incapacitado.');
-      const ausencias = await repoIncapacidades.listar({ colaborador_id: reemplazo_id });
-      if (ausencias.some((a) => a.estado !== 'DADA_DE_BAJA' && a.fecha_inicio <= fecha_fin && a.fecha_fin >= fecha_inicio)) {
-        throw errorHttp('El reemplazo seleccionado también tiene una incapacidad en esas fechas.', 409);
-      }
-      const asignaciones = await repoReemplazos.listar({ reemplazo_id });
-      if (asignaciones.some((a) => a.fecha_inicio <= fecha_fin && a.fecha_fin >= fecha_inicio)) {
-        throw errorHttp('El reemplazo ya cubre a otra persona en esas fechas. Elija otra persona o ajuste el periodo.', 409);
-      }
-    } else if (!justificacion?.trim()) {
-      throw errorHttp('Si no hay reemplazo disponible, escriba la justificación.');
-    }
-
-    const reemplazo = await repoReemplazos.crear({
-      incapacidad_id: caso.id, reemplazo_id: reemplazo_id || null,
-      fecha_inicio, fecha_fin, justificacion: justificacion?.trim() || null,
-    });
-    await registrarBitacora(req.usuario.id, 'ASIGNAR_REEMPLAZO', { incapacidad_id: caso.id });
-    if (reemplazo_id) {
-      const r = await colaboradorPorId(reemplazo_id);
-      await NotificacionService.notificarUsuario(r?.usuario?.id, `Reemplazo asignado · ${caso.numero_caso}`,
-        `Cubrirá a ${caso.colaborador?.usuario?.nombre} del ${fecha_inicio} al ${fecha_fin}.`);
-    }
-    await notificarAuxiliares(`Reemplazo registrado ${caso.numero_caso}`,
-      reemplazo_id ? 'El líder asignó el reemplazo.' : `Sin reemplazo: ${justificacion}`);
-    res.status(201).json({ reemplazo, mensaje: reemplazo_id ? 'Reemplazo asignado y notificado.' : 'Se registró que no hay reemplazo.' });
   }),
 
   /**
