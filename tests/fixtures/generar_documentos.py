@@ -26,7 +26,7 @@ _p = argparse.ArgumentParser(
   python generar_documentos.py documentos --documento 1009
       Enfermedad general de 5 días desde hoy para María Fernanda Ríos (datos de la base de prueba).
   python generar_documentos.py documentos --documento 1010 --tipo ACCIDENTE_TRANSITO --inicio 2026-11-20 --dias 12
-  python generar_documentos.py documentos --documento 1004 --tipo LICENCIA_MATERNIDAD
+  python generar_documentos.py documentos --documento 1087653298 --tipo LICENCIA_MATERNIDAD
   python generar_documentos.py documentos --nombre "Ana Pérez" --documento 43123456 --entidad "Nueva EPS" --ibc 1800000
       Colaborador que no está en la lista de prueba: indique nombre, entidad e IBC.''')
 _p.add_argument('salida', help='Carpeta donde se guardan los documentos')
@@ -187,14 +187,16 @@ def epicrisis(path, entidad, persona, ingreso, motivo, hallazgos, plan, dias, ci
 
 
 # ------------------------------------------------- modo: colaborador específico
-# Colaboradores de la base de prueba (seeders 001 y 002): documento -> (nombre, EPS, IBC)
+# Colaboradores de la base de prueba (seeders 001, 002 y 003): documento -> (nombre, EPS, IBC).
+# Solo usuarios con rol Colaborador: al personal que opera SIGI no se le reportan incapacidades.
 SEMBRADOS = {
-    '1001': ('Carlos Colaborador', 'Salud Total', 2500000), '1002': ('Laura Líder', 'Nueva EPS', 4800000),
-    '1003': ('Rosa Recepcionista', 'Salud Total', 1600000), '1004': ('Andrea Auxiliar', 'SURA EPS', 2200000),
-    '1005': ('Julián Jurídica', 'Sanitas', 5200000), '1006': ('Camila Contabilidad', 'SOS', 4500000),
-    '1007': ('Gloria Documental', 'Famisanar', 1900000), '1008': ('Admin SIGI', 'SURA EPS', 5500000),
+    '1001': ('Carlos Colaborador', 'Salud Total', 2500000),
     '1009': ('María Fernanda Ríos', 'Nueva EPS', 2100000), '1010': ('Jorge Iván Castaño', 'Salud Total', 1500000),
     '1011': ('Paula Andrea Gómez', 'Sanitas', 3000000), '1012': ('Santiago Herrera', 'SOS', 1800000),
+    '1058078253': ('Juan Agudelo', 'Salud Total', 3200000),
+    '1088245671': ('Valentina Ospina Marín', 'SURA EPS', 1900000), '1093784512': ('Andrés Felipe Restrepo', 'Nueva EPS', 2400000),
+    '1087653298': ('Daniela Cardona Loaiza', 'Sanitas', 2800000), '1112459870': ('Luis Eduardo Montoya', 'Salud Total', 1500000),
+    '1094327765': ('Natalia Giraldo Toro', 'Famisanar', 2000000), '1089912346': ('Camilo Andrés Bedoya', 'SOS', 1600000),
 }
 ENCABEZADOS = {'Salud Total': 'SALUD TOTAL EPS-S', 'Sanitas': 'EPS SANITAS', 'SOS': 'EPS SOS', 'Asmet Salud': 'ASMET SALUD EPS'}
 # tipo -> (origen, CIE-10, descripción, motivo, hallazgos, plan)
@@ -244,7 +246,7 @@ def generar_colaborador(a):
         nombre_base, eps, ibc_base = None, None, None
     nombre = a.nombre or nombre_base
     if not nombre or not a.documento:
-        sys.exit('Indique --documento de un colaborador de prueba (1001 a 1012) o --nombre y --documento de otro colaborador.')
+        sys.exit('Indique --documento de un colaborador de prueba (ver SEMBRADOS) o --nombre y --documento de otro colaborador.')
     tipo = a.tipo
     entidad = a.entidad or ('ARL SURA' if tipo == 'ACCIDENTE_LABORAL' else eps)
     if not entidad:
