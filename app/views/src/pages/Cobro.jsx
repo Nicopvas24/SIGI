@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Wallet } from 'lucide-react';
 import { api, formulario, sesion } from '../api.js';
+import ExplicacionLiquidacion from '../components/ExplicacionLiquidacion.jsx';
 import { Aviso, Encabezado, Estado, Panel, Vacio, dinero, fecha, hoy, useDialogo } from '../ui.jsx';
 
 export default function Cobro() {
@@ -42,11 +43,14 @@ export default function Cobro() {
   const solicitarPago = accion(async (c) => {
     const r0 = await dlg.pedir({
       titulo: `Solicitar pago del caso ${c.numero_caso}`,
+      amplio: true,
       descripcion: `Diligencie el formulario de prestaciones económicas de ${c.entidad?.nombre} y adjunte la constancia de envío.`,
       textoAceptar: 'Registrar solicitud',
       campos: [
-        { nombre: 'valor_solicitado', etiqueta: 'Valor solicitado', tipo: 'dinero', min: 1, requerido: true,
-          valor: Number(c.valor_solicitado) || '', ayuda: 'Calculado en el formato de seguimiento. Corríjalo si la liquidación de la entidad es distinta.' },
+        { nombre: 'calculo', tipo: 'vista', render: () => <ExplicacionLiquidacion casoId={c.id} /> },
+        { nombre: 'valor_solicitado', etiqueta: 'Valor que se solicita a la entidad', tipo: 'dinero', min: 1, requerido: true,
+          valor: Number(c.valor_solicitado) || '',
+          ayuda: 'Es el total "Se le cobra a la entidad" del cálculo de arriba. Cámbielo solo si la entidad liquidó un valor distinto.' },
         { nombre: 'evidencia', etiqueta: 'Constancia de envío', tipo: 'file', requerido: true },
       ],
     });

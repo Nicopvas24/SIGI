@@ -32,7 +32,16 @@ const BASE_SISTEMA =
   'Eres el asistente de análisis de SIGI, el sistema de gestión de incapacidades de Gestión Humana ' +
   'de una empresa colombiana (EPS, ARL, licencias de maternidad y paternidad). Responde en español, ' +
   'con frases claras y concretas. Protege la reserva clínica: no transcribas detalles médicos más allá ' +
-  'del código CIE-10. Responde únicamente con JSON válido que siga el esquema indicado.';
+  'del código CIE-10. No uses emojis ni símbolos decorativos. Responde únicamente con JSON válido que siga el esquema indicado.';
+
+// Quita emojis y símbolos pictográficos de los textos que devuelve la IA (por si los incluye igual)
+const EMOJIS = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu;
+function sinEmojis(valor) {
+  if (typeof valor === 'string') return valor.replace(EMOJIS, '').replace(/\s{2,}/g, ' ').replace(/\s+([:;,.])/g, '$1').trim();
+  if (Array.isArray(valor)) return valor.map(sinEmojis);
+  if (valor && typeof valor === 'object') return Object.fromEntries(Object.entries(valor).map(([k, v]) => [k, sinEmojis(v)]));
+  return valor;
+}
 
 /**
  * Llama al proveedor de IA configurado y devuelve el JSON de la respuesta.
@@ -65,11 +74,11 @@ function parsearJSON(bruto) {
     throw Object.assign(new Error('La IA no devolvió contenido (posible bloqueo por políticas de seguridad).'), { status: 422 });
   }
   try {
-    return JSON.parse(texto);
+    return sinEmojis(JSON.parse(texto));
   } catch {
     const inicio = texto.indexOf('{');
     const fin = texto.lastIndexOf('}');
-    try { return JSON.parse(texto.slice(inicio, fin + 1)); } catch { /* sigue abajo */ }
+    try { return sinEmojis(JSON.parse(texto.slice(inicio, fin + 1))); } catch { /* sigue abajo */ }
     throw Object.assign(new Error('La respuesta de la IA no tiene un formato válido. Intente de nuevo.'), { status: 502 });
   }
 }
@@ -112,17 +121,55 @@ async function pedirJSONOvh(partes, instruccion) {
   if (imagenes > MAX_IMAGENES) final.push({ type: 'text', text: `(Se omitieron ${imagenes - MAX_IMAGENES} imagen(es) por el límite del modelo gratuito.)` });
 
   const { modelo, modeloVision } = config.ia.ovh;
-  const datos = await llamarOvh({
-    model: imagenes ? modeloVision : modelo,
-    messages: [
-      { role: 'system', content: BASE_SISTEMA + (instruccion ? `\n${instruccion}` : '') },
-      { role: 'user', content: final },
-    ],
-    temperature: 0.2,
-    max_tokens: 4000,
-    response_format: { type: 'json_object' },
-  });
-  return parsearJSON(datos.choices?.[0]?.message?.content);
+  const sistema = BASE_SISTEMA + (instruccion ? `\n${instruccion}` : '');
+  try {
+    const datos = await llamarOvh({
+      model: imagenes ? modeloVision : modelo,
+      messages: [{ role: 'system', content: sistema }, { role: 'user', content: final }],
+      temperature: 0.2,
+      max_tokens: 4000,
+      response_format: { type: 'json_object' },
+    });
+    return parsearJSON(datos.choices?.[0]?.message?.content);
+  } catch (e) {
+    if (!e.limite) throw e;
+    // Cupo de OVHcloud agotado: los textos (y los PDF, que se envían como texto) pasan al servicio de respaldo
+    if (imagenes) {
+      throw Object.assign(new Error('Se agotó el cupo gratuito de la IA para leer imágenes. Suba el certificado en PDF, '
+        + 'llene el formulario a mano o configure GEMINI_API_KEY en el archivo .env.'), { status: 429 });
+    }
+    const texto = final.map((c) => c.text).join('\n\n');
+    return parsearJSON(await llamarPollinations(sistema, texto));
+  }
+}
+
+// ---------- Respaldo gratuito sin clave: Pollinations (solo texto, ~1 respuesta cada 45 s por IP) ----------
+async function llamarPollinations(sistema, texto) {
+  let res;
+  try {
+    res = await fetch(config.ia.respaldoUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'openai',
+        messages: [{ role: 'system', content: sistema }, { role: 'user', content: texto }],
+        response_format: { type: 'json_object' },
+      }),
+      signal: AbortSignal.timeout(TIEMPO_MAX_RESPUESTA_MS),
+    });
+  } catch (e) {
+    console.error('[IaOcrService] respaldo:', e.message);
+    throw Object.assign(new Error(e.name === 'TimeoutError'
+      ? 'La IA tardó demasiado en responder. Intente de nuevo.'
+      : 'No se pudo contactar el servicio gratuito de IA. Revise la conexión a internet.'), { status: e.name === 'TimeoutError' ? 504 : 502 });
+  }
+  if (res.ok) return (await res.json()).choices?.[0]?.message?.content;
+  const espera = Number(res.headers.get('retry-after'));
+  console.error('[IaOcrService] respaldo', res.status);
+  if (res.status === 402 || res.status === 429) {
+    throw Object.assign(new Error(`La IA gratuita permite una lectura cada 45 segundos. Intente de nuevo${espera ? ` en ${espera} s` : ' en un momento'}.`), { status: 429 });
+  }
+  throw Object.assign(new Error(`El servicio gratuito de IA no respondió (error ${res.status}). Intente de nuevo.`), { status: 502 });
 }
 
 async function llamarOvh(body, intento = 1) {
@@ -145,10 +192,16 @@ async function llamarOvh(body, intento = 1) {
   if (res.ok) return res.json();
 
   const detalle = await res.text().catch(() => '');
-  // Límite de solicitudes: un solo reintento tras esperar como máximo 1 s; si persiste, se avisa de inmediato
-  if (res.status === 429 && intento === 1) {
-    await espera(ESPERA_MAX_REINTENTO_MS);
-    return llamarOvh(body, intento + 1);
+  if (res.status === 429) {
+    const segundos = Number(res.headers.get('retry-after')) || 0;
+    // Límite por minuto: un solo reintento tras esperar como máximo 1 s
+    if (intento === 1 && segundos <= 60) {
+      await espera(ESPERA_MAX_REINTENTO_MS);
+      return llamarOvh(body, intento + 1);
+    }
+    // Cupo agotado (OVHcloud ahora limita el acceso sin clave por año): quien llama usa el respaldo
+    console.error('[IaOcrService] OVH sin cupo; espera indicada:', segundos, 's');
+    throw Object.assign(new Error('Se alcanzó el límite gratuito de la IA. Intente de nuevo más tarde.'), { status: 429, limite: true });
   }
   console.error('[IaOcrService] OVH', res.status, detalle.slice(0, 300));
   const mensajes = {
@@ -227,6 +280,8 @@ Esquema:
   "campos_dudosos": string[],
   "observaciones": string
 }
+"entidad" es la EPS o ARL que expide el certificado y paga la incapacidad (por ejemplo "Salud Total", "Nueva EPS",
+"ARL SURA"), normalmente en el encabezado. No es la IPS, clínica u hospital donde atendieron al paciente.
 Si el documento no es un certificado de incapacidad, pon legible=false y explícalo en observaciones.`),
     ]);
   },

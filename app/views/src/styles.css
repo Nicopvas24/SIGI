@@ -538,7 +538,9 @@ dialog.dialogo form { max-height: calc(100vh - 34px); }
   padding: 8px 10px; border-radius: 6px; cursor: pointer;
 }
 .buscador-opcion.activa { background: var(--sello-claro); }
-.buscador-opcion.elegida .buscador-nombre::after { content: ' ✓'; color: var(--sello); }
+.buscador-marca { margin-left: 6px; vertical-align: -2px; color: var(--sello); }
+.sugerencia { display: flex; align-items: flex-start; gap: 4px; }
+.sugerencia svg { flex-shrink: 0; margin-top: 3px; }
 .buscador-nombre { font-size: 14px; font-weight: 580; color: var(--texto); }
 .buscador-nombre mark { background: var(--resaltador); color: inherit; border-radius: 2px; padding: 0 1px; }
 .buscador-detalle { grid-column: 1; font-size: 12.5px; color: var(--texto-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -620,3 +622,30 @@ tr.fila-editando, tr.fila-editando:hover { background: var(--sello-claro); }
   .mi-caso-valor { align-items: flex-start; }
   .mi-caso-boton { width: 100%; }
 }
+
+/* ---------- Explicación de la liquidación ---------- */
+dialog.dialogo.amplio { width: min(640px, calc(100vw - 32px)); }
+.dialogo-vista { margin: 0; }
+.liquidacion { padding: 12px 14px; border: 1px solid var(--sello-borde); border-radius: 8px; background: #FBFAFF; font-size: 13.5px; }
+.liquidacion.aviso-ibc { border-color: #EAD57A; background: var(--resaltador-suave); color: var(--resaltador-texto); }
+.liquidacion-titulo { display: flex; align-items: center; gap: 6px; font-weight: 650; color: var(--tinta-800); margin-bottom: 4px; }
+.liquidacion-titulo svg { color: var(--sello); }
+.liquidacion-formula { color: var(--texto-2); }
+.liquidacion-formula b { color: var(--texto); }
+.liquidacion-nota { margin-top: 6px; font-size: 13px; color: var(--texto-2); }
+.liquidacion-tabla { margin-top: 10px; font-size: 13px; border: 1px solid var(--borde); border-radius: 6px; overflow: hidden; background: var(--superficie); }
+.liquidacion-tabla th { position: static; padding: 6px 10px; font-size: 11px; }
+.liquidacion-tabla td { padding: 7px 10px; }
+.liquidacion-tabla tr.cobra td { background: var(--sello-claro); }
+.liquidacion-totales { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 10px; }
+.liquidacion-totales div { display: flex; flex-direction: column; }
+.liquidacion-totales span { font-size: 12px; color: var(--texto-2); }
+.liquidacion-totales b { font-size: 16px; font-weight: 700; }
+.liquidacion-totales .total-entidad b { font-size: 20px; color: var(--sello-presionado); }
+.que-es-ibc { margin-top: 10px; font-size: 13px; color: var(--texto-2); }
+.que-es-ibc summary { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; font-weight: 600; color: var(--sello); }
+.que-es-ibc summary:hover { color: var(--sello-hover); }
+.que-es-ibc p { margin-top: 6px; max-width: 70ch; }
+.aviso-ibc .que-es-ibc { color: var(--texto-2); }
+dialog.dialogo { max-height: calc(100vh - 32px); }
+dialog.dialogo .dialogo-cuerpo { max-height: calc(100vh - 220px); overflow-y: auto; }

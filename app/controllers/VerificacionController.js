@@ -24,6 +24,26 @@ export const VerificacionController = {
   }),
 
   /**
+   * GET /api/incapacidades/:id/liquidacion?ibc=
+   * Vista previa del cálculo, tramo por tramo, para explicarlo en pantalla. Sin ?ibc usa el del último
+   * formato de seguimiento o, si no hay, el registrado para el colaborador. No guarda nada.
+   */
+  liquidacion: asyncHandler(async (req, res) => {
+    const caso = await casoOError(req.params.id);
+    const ultimoFormato = [...(caso.formatos || [])].sort((a, b) => b.version - a.version)[0];
+    const ibcConsulta = req.query.ibc !== undefined && req.query.ibc !== '' ? Number(req.query.ibc) : null;
+    if (ibcConsulta !== null && !(ibcConsulta >= 0)) throw errorHttp('El IBC debe ser un número mayor o igual a cero.');
+    const ibc = Math.round(ibcConsulta ?? Number(ultimoFormato?.ibc ?? caso.colaborador?.ibc ?? 0));
+    const previos = (await diasAcumulados(caso)) - caso.dias;
+    const liq = ReglasIncapacidadService.liquidar({ tipo: caso.tipo, dias: caso.dias, ibc, diasAcumulados: previos });
+    res.json({
+      ibc, dias: caso.dias, dias_previos: previos, tipo: caso.tipo, entidad: caso.entidad?.nombre,
+      ibc_registrado: Number(caso.colaborador?.ibc || 0), desde_formato: Boolean(ultimoFormato && ibcConsulta === null),
+      ...liq,
+    });
+  }),
+
+  /**
    * Verificar documentación.
    * body: { conformes: [documento_id, ...], ibc?, observaciones? }
    * Los documentos no incluidos en `conformes` quedan como no conformes.

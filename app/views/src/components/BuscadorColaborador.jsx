@@ -2,7 +2,7 @@
 // Teclado: escribir filtra, flechas arriba/abajo recorren, Inicio/Fin van al primero o al último,
 // Enter selecciona, Esc cierra la lista o limpia la selección y Tab sale del campo.
 import { forwardRef, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Building2, CircleAlert, Search, ShieldCheck, X } from 'lucide-react';
+import { Building2, Check, CircleAlert, Search, ShieldCheck, X } from 'lucide-react';
 import { Estado } from '../ui.jsx';
 
 const MAX_RESULTADOS = 50;
@@ -179,7 +179,10 @@ const BuscadorColaborador = forwardRef(function BuscadorColaborador(
                 onMouseDown={(e) => { e.preventDefault(); elegir(c); }}
                 onMouseMove={() => setActivo(i)}
               >
-                <span className="buscador-nombre"><Resaltado texto={c.usuario?.nombre} palabras={palabras} /></span>
+                <span className="buscador-nombre">
+                  <Resaltado texto={c.usuario?.nombre} palabras={palabras} />
+                  {c.id === valor && <Check size={14} strokeWidth={2.5} className="buscador-marca" aria-hidden="true" />}
+                </span>
                 <span className="buscador-detalle">
                   C.C. {c.usuario?.documento}{c.cargo && ` · ${c.cargo}`}{c.area && ` · ${c.area}`}{c.eps?.nombre && ` · ${c.eps.nombre}`}
                 </span>

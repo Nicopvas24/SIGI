@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Building2, CalendarDays, FileCheck2, FileText, Sparkles } from 'lucide-react';
 import { api, abrirDocumento } from '../api.js';
+import ExplicacionLiquidacion from '../components/ExplicacionLiquidacion.jsx';
 import { Aviso, Encabezado, Estado, Panel, Vacio, dinero, documento, fecha, tipo, useDialogo, useIA } from '../ui.jsx';
 
 const REVISABLES = ['CARGADO', 'EN_REVISION', 'CONFORME', 'NO_CONFORME'];
@@ -20,14 +21,17 @@ export default function Verificacion() {
     const docs = caso.documentos.filter((d) => REVISABLES.includes(d.estado));
     const r0 = await dlg.pedir({
       titulo: `Verificar ${caso.numero_caso}`,
+      amplio: true,
       descripcion: `Exigidos: ${caso.documentos_requeridos.map(documento).join(', ')}.\nMarque los documentos que están completos, legibles y corresponden a ${caso.colaborador?.usuario?.nombre}. Los que deje sin marcar se solicitarán de nuevo al colaborador.`,
       textoAceptar: 'Guardar verificación',
       campos: [
         { nombre: 'conformes', etiqueta: 'Documentos conformes', tipo: 'multi',
           opciones: docs.map((d) => [d.id, `${documento(d.tipo_documento)}${d.url ? '' : ' (físico)'}`]),
           valor: docs.filter((d) => d.estado !== 'NO_CONFORME').map((d) => d.id) },
-        { nombre: 'ibc', etiqueta: 'Ingreso base de cotización (IBC)', tipo: 'dinero', min: 0,
-          valor: caso.colaborador?.ibc || '', ayuda: `Registrado: ${dinero(caso.colaborador?.ibc)}. Se usa para liquidar los días a cargo de la empresa y de la entidad.` },
+        { nombre: 'ibc', etiqueta: 'Ingreso base de cotización (IBC) mensual', tipo: 'dinero', min: 0,
+          valor: caso.colaborador?.ibc || '',
+          ayuda: `Registrado para el colaborador: ${dinero(caso.colaborador?.ibc)}. Corríjalo si la planilla del mes anterior a la incapacidad dice otro valor.` },
+        { nombre: 'calculo', tipo: 'vista', render: (v) => <ExplicacionLiquidacion casoId={caso.id} ibc={v.ibc} /> },
         { nombre: 'observaciones', etiqueta: 'Observaciones', tipo: 'textarea' },
       ],
     });

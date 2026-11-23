@@ -28,6 +28,8 @@ export const config = {
         modelo: process.env.OVH_AI_MODELO?.trim() || 'Mistral-Small-3.2-24B-Instruct-2506',
         modeloVision: process.env.OVH_AI_MODELO_VISION?.trim() || 'Qwen2.5-VL-72B-Instruct',
       },
+      // Respaldo sin clave cuando se agota el cupo de OVHcloud (solo texto, ~1 respuesta cada 45 s por IP)
+      respaldoUrl: process.env.IA_RESPALDO_URL?.trim() || 'https://text.pollinations.ai/openai',
     };
   })(),
   // Plazos del procedimiento de Gestión Humana

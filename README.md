@@ -80,6 +80,8 @@ Cada cambio de estado se valida contra el diagrama de estados (`app/models/enums
 
 Con OVHcloud, los PDF se envían como texto extraído (`unpdf`); si el PDF es escaneado, sus dos primeras páginas se convierten en imagen. Las fotos se reducen a 1600 px.
 
+OVHcloud limita el acceso sin clave con un cupo anual. Cuando se agota, SIGI pasa solo a **Pollinations** (gratuito, sin clave, una respuesta cada 45 s por IP), que lee textos y PDF con texto pero no fotos ni PDF escaneados. Para no depender de cupos gratuitos, configure `IA_PROVEEDOR=gemini` con una `GEMINI_API_KEY`.
+
 | Función | Dónde se usa | Endpoint |
 |---|---|---|
 | Leer un certificado (PDF o imagen) y proponer los datos del caso | Recepción | `POST /api/ia/leer-certificado` |

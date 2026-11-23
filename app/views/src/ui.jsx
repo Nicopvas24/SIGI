@@ -282,9 +282,29 @@ export function PanelIA({ titulo, descripcion, accion, cargando, onEjecutar, chi
 const DialogoCtx = createContext(null);
 export const useDialogo = () => useContext(DialogoCtx);
 
+/** Lee los valores del formulario del diálogo según el tipo de cada campo. */
+function leerValores(form, campos = []) {
+  if (!form) return {};
+  const fd = new FormData(form);
+  const valores = {};
+  for (const c of campos) {
+    if (c.tipo === 'vista') continue; // solo muestra información, no envía nada
+    if (c.tipo === 'multi') valores[c.nombre] = fd.getAll(c.nombre);
+    else if (c.tipo === 'file') {
+      const f = fd.get(c.nombre);
+      valores[c.nombre] = f && f.size ? f : null;
+    } else if (c.tipo === 'dinero') {
+      valores[c.nombre] = aPesos(fd.get(c.nombre)); // número entero de pesos o ''
+    } else valores[c.nombre] = String(fd.get(c.nombre) ?? '').trim();
+  }
+  return valores;
+}
+
 export function DialogoProvider({ children }) {
   const ref = useRef(null);
+  const formRef = useRef(null);
   const [cfg, setCfg] = useState(null);
+  const [vivos, setVivos] = useState({}); // valores mientras se escribe, para los campos de tipo "vista"
   const resolver = useRef(null);
 
   const abrir = useCallback((c) => new Promise((res) => {
@@ -292,7 +312,10 @@ export function DialogoProvider({ children }) {
     setCfg(c);
   }), []);
 
-  useEffect(() => { if (cfg && ref.current && !ref.current.open) ref.current.showModal(); }, [cfg]);
+  useEffect(() => {
+    if (cfg && ref.current && !ref.current.open) ref.current.showModal();
+    if (cfg) setVivos(leerValores(formRef.current, cfg.campos));
+  }, [cfg]);
 
   function cerrar(valor) {
     ref.current?.close();
@@ -304,18 +327,7 @@ export function DialogoProvider({ children }) {
   function enviar(e) {
     e.preventDefault();
     if (!cfg.campos?.length) return cerrar(true);
-    const fd = new FormData(e.currentTarget);
-    const valores = {};
-    for (const c of cfg.campos) {
-      if (c.tipo === 'multi') valores[c.nombre] = fd.getAll(c.nombre);
-      else if (c.tipo === 'file') {
-        const f = fd.get(c.nombre);
-        valores[c.nombre] = f && f.size ? f : null;
-      } else if (c.tipo === 'dinero') {
-        valores[c.nombre] = aPesos(fd.get(c.nombre)); // número entero de pesos o ''
-      } else valores[c.nombre] = String(fd.get(c.nombre) ?? '').trim();
-    }
-    cerrar(valores);
+    cerrar(leerValores(e.currentTarget, cfg.campos));
   }
 
   const api = {
@@ -334,17 +346,19 @@ export function DialogoProvider({ children }) {
   return (
     <DialogoCtx.Provider value={api}>
       {children}
-      <dialog ref={ref} className="dialogo" onCancel={(e) => { e.preventDefault(); cerrar(null); }}
+      <dialog ref={ref} className={`dialogo ${cfg?.amplio ? 'amplio' : ''}`} onCancel={(e) => { e.preventDefault(); cerrar(null); }}
         aria-labelledby="dialogo-titulo">
         {cfg && (
-          <form onSubmit={enviar}>
+          <form ref={formRef} onSubmit={enviar} onChange={(e) => setVivos(leerValores(e.currentTarget, cfg.campos))}>
             <div className="dialogo-cabeza">
               <h2 id="dialogo-titulo">{cfg.titulo}</h2>
               {cfg.descripcion && <p>{cfg.descripcion}</p>}
             </div>
             {cfg.campos?.length > 0 && (
               <div className="dialogo-cuerpo">
-                {cfg.campos.map((c, i) => <CampoDialogo key={c.nombre} c={c} autoFocus={i === 0} />)}
+                {cfg.campos.map((c, i) => (c.tipo === 'vista'
+                  ? <div key={c.nombre} className="dialogo-vista">{c.render(vivos)}</div>
+                  : <CampoDialogo key={c.nombre} c={c} autoFocus={i === 0} />))}
               </div>
             )}
             <div className="dialogo-pie">

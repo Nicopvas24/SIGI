@@ -1,6 +1,6 @@
 // Vista Monitoreo de días acumulados + predicción con IA
 import { useEffect, useState } from 'react';
-import { Activity, Check } from 'lucide-react';
+import { Activity, ArrowRight, Check } from 'lucide-react';
 import { api } from '../api.js';
 import { Aviso, Encabezado, MiniRegla, Panel, PanelIA, ReglaDias, Vacio, fecha, useDialogo } from '../ui.jsx';
 
@@ -136,7 +136,7 @@ export default function Dashboard() {
                       <td className="caso">{e.numero_caso}</td>
                       <td><span className={`sello ${RIESGO[e.riesgo] || 'neutro'}`}>{e.riesgo}</span></td>
                       <td className="num">{e.dias_acumulados}</td>
-                      <td>{e.razonamiento}<span className="secundario-texto">→ {e.accion_sugerida}</span></td>
+                      <td>{e.razonamiento}<span className="secundario-texto sugerencia"><ArrowRight size={13} aria-hidden="true" />{e.accion_sugerida}</span></td>
                     </tr>
                   ))}
                 </tbody>

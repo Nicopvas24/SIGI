@@ -183,9 +183,9 @@ export default function Usuarios() {
                 <input id="u-area" value={form.area} onChange={set('area')} />
               </div>
               <div className="campo">
-                <label htmlFor="u-ibc">IBC</label>
+                <label htmlFor="u-ibc">IBC (ingreso base de cotización) mensual</label>
                 <InputDinero id="u-ibc" min={0} value={form.ibc} onChange={(v) => setForm((f) => ({ ...f, ibc: v }))} />
-                <span className="ayuda">Base para liquidar las incapacidades.</span>
+                <span className="ayuda">Salario mensual sobre el que cotiza a salud y pensión. Se usa para liquidar sus incapacidades (IBC ÷ 30 = valor de un día).</span>
               </div>
               <div className="campo">
                 <label htmlFor="u-eps">EPS</label>

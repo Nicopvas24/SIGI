@@ -46,6 +46,7 @@ rutas.post('/ia/leer-certificado', subir.single('archivo'), RecepcionController.
 
 // ---------- Verificación documental ----------
 rutas.get('/verificacion/pendientes', permitirRoles(AUX), VerificacionController.pendientes);
+rutas.get('/incapacidades/:id/liquidacion', permitirRoles(AUX, 'CONTABILIDAD'), VerificacionController.liquidacion);
 rutas.post('/incapacidades/:id/verificar', permitirRoles(AUX), VerificacionController.verificar);
 rutas.post('/incapacidades/:id/segundo-llamado', permitirRoles(AUX), VerificacionController.segundoLlamado);
 rutas.post('/ia/analizar-soportes/:id', permitirRoles(AUX), VerificacionController.analizarSoportesIA);

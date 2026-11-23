@@ -41,12 +41,34 @@ export const ReglasIncapacidadService = {
    */
   liquidar({ tipo, dias, ibc, diasAcumulados = 0 }) {
     const ibcDiario = Number(ibc) / 30;
-    const r = { diasEmpresa: 0, valorEmpresa: 0, diasEntidad: 0, valorEntidad: 0, diasFondoPension: 0, advertencias: [] };
+    const r = {
+      diasEmpresa: 0, valorEmpresa: 0, diasEntidad: 0, valorEntidad: 0, diasFondoPension: 0, advertencias: [],
+      ibcDiario: redondear(ibcDiario), tramos: [],
+    };
 
     if (tipo === 'LICENCIA_MATERNIDAD' || tipo === 'LICENCIA_PATERNIDAD') {
       r.diasEntidad = dias;
       r.valorEntidad = redondear(dias * ibcDiario);
+      r.tramos.push({ desde: 1, hasta: dias, dias, porcentaje: 100, paga: 'ENTIDAD', valor: r.valorEntidad });
       return r;
+    }
+
+    // Desglose por tramos (para explicarlo en pantalla): días con el mismo porcentaje y pagador
+    const TRAMOS = [
+      { hasta: 2, porcentaje: 100, paga: 'EMPRESA', factor: 1 },
+      { hasta: 90, porcentaje: 66.67, paga: 'ENTIDAD', factor: 2 / 3 },
+      { hasta: 180, porcentaje: 50, paga: 'ENTIDAD', factor: 0.5 },
+      { hasta: Infinity, porcentaje: 0, paga: 'FONDO_PENSIONES', factor: 0 },
+    ];
+    let inicioTramo = 0;
+    for (const t of TRAMOS) {
+      const desde = Math.max(diasAcumulados + 1, inicioTramo + 1);
+      const hasta = Math.min(diasAcumulados + dias, t.hasta);
+      if (hasta >= desde) {
+        const n = hasta - desde + 1;
+        r.tramos.push({ desde, hasta, dias: n, porcentaje: t.porcentaje, paga: t.paga, valor: redondear(n * ibcDiario * t.factor) });
+      }
+      inicioTramo = t.hasta;
     }
 
     for (let i = 1; i <= dias; i++) {
@@ -68,6 +90,12 @@ export const ReglasIncapacidadService = {
     }
     r.valorEmpresa = redondear(r.valorEmpresa);
     r.valorEntidad = redondear(r.valorEntidad);
+    // Cada tramo se redondea por separado: el último absorbe la diferencia de un peso para que cuadre con el total
+    for (const [quien, total] of [['EMPRESA', r.valorEmpresa], ['ENTIDAD', r.valorEntidad]]) {
+      const delPagador = r.tramos.filter((t) => t.paga === quien);
+      const diferencia = total - delPagador.reduce((s, t) => s + t.valor, 0);
+      if (diferencia && delPagador.length) delPagador[delPagador.length - 1].valor += diferencia;
+    }
     return r;
   },
 
@@ -95,8 +123,10 @@ export const ReglasIncapacidadService = {
   validarTransicion(estadoActual, nuevoEstado) {
     const permitidos = TransicionesEstado[estadoActual] || [];
     if (!permitidos.includes(nuevoEstado)) {
+      const legible = (estado) => String(estado).replaceAll('_', ' ').toLowerCase();
       const e = new Error(
-        `Transición inválida (DE-01): ${estadoActual} → ${nuevoEstado}. Permitidas: ${permitidos.join(', ') || 'ninguna'}`
+        `No se puede pasar el caso de "${legible(estadoActual)}" a "${legible(nuevoEstado)}". ` +
+        (permitidos.length ? `Desde ese estado solo puede pasar a: ${permitidos.map(legible).join(', ')}.` : 'Ese estado ya es final.')
       );
       e.status = 422;
       throw e;

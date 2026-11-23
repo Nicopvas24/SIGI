@@ -65,3 +65,31 @@ Tipos: `ENFERMEDAD_GENERAL` (por defecto), `ACCIDENTE_LABORAL`, `ACCIDENTE_TRANS
 | `d_foto_certificado_celular.jpg` | "Subir certificado" en Recepción | Foto inclinada: debe leer a Jorge, 3 días desde 2026-11-10, H10.9 |
 | `e_no_es_certificado_factura.pdf` | "Subir certificado" en Recepción | La IA responde que no es un certificado y no llena el formulario |
 | `f_pdf_danado.pdf` | Leer con IA o adjuntar | Mensaje de archivo dañado o ilegible, sin que el sistema falle |
+
+## `presentacion_juan_agudelo` (caso para la presentación)
+
+Colaborador **Juan Agudelo** · `juan.agudelo@sigi.demo` · contraseña `Sigi2026!` · CC 1058078253 · Salud Total · IBC $ 3.200.000.
+
+| Dato del formulario | Valor |
+|---|---|
+| Tipo | Enfermedad general |
+| Entidad | Salud Total |
+| Inicio · días | 2026-11-23 · 10 días (fin 2026-12-02) |
+| CIE-10 | J06.9 |
+| Valor a cargo de Salud Total | $ 568.889 (días 3 a 10 al 66,67 % de $ 106.667 por día) |
+| A cargo de la empresa | $ 213.333 (días 1 y 2 al 100 %) |
+
+| Archivo | Dónde se sube |
+|---|---|
+| `certificado_incapacidad.pdf` | Recepción → "Subir certificado" (la IA llena el formulario) |
+| `epicrisis.pdf` | "Adjuntar soportes" en la tarjeta del caso |
+| `evidencia_transcripcion.pdf` | Transcripción → Transcribir |
+| `evidencia_radicado.pdf` | Transcripción → Radicar |
+| `evidencia_solicitud_pago.pdf` | Cobro → Solicitar pago |
+| `soporte_liquidacion_pago.pdf` | Cobro → Registrar pago (valor $ 568.889) |
+
+Para regenerarlos con la fecha del día de la presentación (así no salen como entrega extemporánea):
+
+```
+python tests/fixtures/generar_documentos.py tests/fixtures/documentos/presentacion_juan_agudelo --nombre "Juan Agudelo" --documento 1058078253 --entidad "Salud Total" --tipo ENFERMEDAD_GENERAL --dias 10 --ibc 3200000
+```
