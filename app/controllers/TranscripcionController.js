@@ -109,7 +109,24 @@ export const TranscripcionController = {
    * GET /api/sgsst/reporte?periodo=YYYY-MM  (+ ia=true para el análisis con IA)
    */
   reporteAusentismo: asyncHandler(async (req, res) => {
-    const periodo = /^\d{4}-\d{2}$/.test(req.query.periodo || '') ? req.query.periodo : new Date().toISOString().slice(0, 7);
+    const { periodo, resumen, registros } = await calcularAusentismo(req.query.periodo);
+
+    let analisis_ia = null;
+    if (req.query.ia === 'true') {
+      if (!registros.length) throw errorHttp('No hay incapacidades en el periodo para analizar.', 422);
+      analisis_ia = await IaOcrService.analizarAusentismo({
+        periodo, resumen,
+        registros: registros.map(({ colaborador, numero_caso, ...r }) => r), // anonimizado
+      });
+    }
+    await registrarBitacora(req.usuario.id, 'REPORTE_SGSST', { periodo, ia: Boolean(analisis_ia) });
+    res.json({ resumen, registros, analisis_ia });
+  }),
+};
+
+/** Ausentismo de un mes (YYYY-MM; por defecto el actual). La usan el reporte SG-SST y el informe PDF. */
+export async function calcularAusentismo(periodoConsulta) {
+    const periodo = /^\d{4}-\d{2}$/.test(periodoConsulta || '') ? periodoConsulta : new Date().toISOString().slice(0, 7);
     const [anio, mes] = periodo.split('-').map(Number);
     const desde = `${periodo}-01`;
     const hasta = new Date(Date.UTC(anio, mes, 0)).toISOString().slice(0, 10);
@@ -145,19 +162,8 @@ export const TranscripcionController = {
       por_area: agrupar(registros, 'area'),
       por_origen: agrupar(registros, 'origen'),
     };
-
-    let analisis_ia = null;
-    if (req.query.ia === 'true') {
-      if (!registros.length) throw errorHttp('No hay incapacidades en el periodo para analizar.', 422);
-      analisis_ia = await IaOcrService.analizarAusentismo({
-        periodo, resumen,
-        registros: registros.map(({ colaborador, numero_caso, ...r }) => r), // anonimizado
-      });
-    }
-    await registrarBitacora(req.usuario.id, 'REPORTE_SGSST', { periodo, ia: Boolean(analisis_ia) });
-    res.json({ resumen, registros, analisis_ia });
-  }),
-};
+    return { periodo, desde, hasta, resumen, registros };
+}
 
 function agrupar(filas, campo) {
   return filas.reduce((acc, f) => {

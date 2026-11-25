@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Activity, Archive, ArrowLeftRight, Bell, ChartColumn, FileCheck2, FileInput, Gavel, LogOut, Menu, Stamp, UserCog, Users, Wallet, X } from 'lucide-react';
+import { Activity, Archive, ArrowLeftRight, Bell, ChartColumn, FileCheck2, FileDown, FileInput, Gavel, LogOut, Menu, Stamp, UserCog, Users, Wallet, X } from 'lucide-react';
 import { api, sesion, cerrarSesion } from '../api.js';
 import { ROLES, iniciales, useIA } from '../ui.jsx';
 
@@ -17,6 +17,7 @@ const MENU = [
   { ruta: '/colaboradores', texto: 'Colaboradores', icono: Users, grupo: 'Personas', roles: ['AUXILIAR', 'ADMIN'] },
   { ruta: '/usuarios', texto: 'Usuarios', icono: UserCog, grupo: 'Personas', roles: ['ADMIN'] },
   { ruta: '/estadisticas', texto: 'Estadísticas', icono: ChartColumn, grupo: 'Análisis', roles: ['AUXILIAR', 'ADMIN'] },
+  { ruta: '/informes', texto: 'Informes', icono: FileDown, grupo: 'Análisis', roles: ['AUXILIAR', 'CONTABILIDAD', 'ADMIN'] },
 ];
 
 /** Agrupa los módulos del rol; los títulos de grupo solo se muestran si hay más de un grupo. */

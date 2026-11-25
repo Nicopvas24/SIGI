@@ -30,12 +30,8 @@ export function casosVigentes(casos) {
   return casos.filter((c) => !tieneProrroga.has(c.id) && !CERRADOS.includes(c.estado));
 }
 
-export const MonitoreoController = {
-  /**
-   * Reporte de casos que superan 90/120/150/180 días acumulados (con prórrogas),
-   * con las acciones que corresponden a cada hito.
-   */
-  reporte: asyncHandler(async (req, res) => {
+/** Casos vigentes con 90 días o más acumulados, de mayor a menor. La usan Monitoreo y el informe PDF. */
+export async function casosProlongados() {
     const casos = await listarIncapacidades({});
     const acumulados = calcularAcumulados(casos);
     const filas = casosVigentes(casos)
@@ -57,7 +53,16 @@ export const MonitoreoController = {
       })
       .filter((f) => f.dias_acumulados >= 90)
       .sort((a, b) => b.dias_acumulados - a.dias_acumulados);
-    res.json({ umbrales: [90, 120, 150, 180], filas });
+    return filas;
+}
+
+export const MonitoreoController = {
+  /**
+   * Reporte de casos que superan 90/120/150/180 días acumulados (con prórrogas),
+   * con las acciones que corresponden a cada hito.
+   */
+  reporte: asyncHandler(async (req, res) => {
+    res.json({ umbrales: [90, 120, 150, 180], filas: await casosProlongados() });
   }),
 
   /**

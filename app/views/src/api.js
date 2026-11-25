@@ -64,6 +64,40 @@ export async function api(ruta, { method = 'GET', body, formData } = {}, reinten
   return datos;
 }
 
+/**
+ * Descarga un archivo generado por la API (por ejemplo, un informe en PDF) con la sesión actual.
+ * El nombre sale del encabezado Content-Disposition; si no viene, se usa `nombre`.
+ */
+export async function descargar(ruta, nombre = 'informe.pdf', reintento = true) {
+  const s = sesion();
+  const headers = {};
+  if (s?.token) headers.Authorization = `Bearer ${s.token}`;
+  else if (s?.usuario?.correo) headers['x-demo-correo'] = s.usuario.correo;
+
+  let res;
+  try {
+    res = await fetch(`${BASE}${ruta}`, { headers });
+  } catch {
+    throw Object.assign(new Error('No hay conexión con el servidor de SIGI. Verifique que el backend esté encendido.'), { status: 0 });
+  }
+  if (res.status === 401) {
+    if (reintento && s?.token && (await renovarToken())) return descargar(ruta, nombre, false);
+    expulsar();
+  }
+  if (!res.ok) {
+    const datos = await res.json().catch(() => ({}));
+    throw Object.assign(new Error(datos.error || `Error ${res.status}`), { status: res.status });
+  }
+  const archivo = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '')?.[1] || nombre;
+  const url = URL.createObjectURL(await res.blob());
+  const enlace = Object.assign(document.createElement('a'), { href: url, download: archivo });
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  return archivo;
+}
+
 /** Construye un FormData con campos de texto y archivos ({ campo: File | null }). */
 export function formulario(campos = {}, archivos = {}) {
   const fd = new FormData();

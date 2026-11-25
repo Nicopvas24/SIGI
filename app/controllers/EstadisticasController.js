@@ -60,9 +60,8 @@ function porMes(casos, anio) {
   });
 }
 
-export const EstadisticasController = {
-  /** GET /api/estadisticas?anio=YYYY  (sin año: todo el histórico) */
-  resumen: asyncHandler(async (req, res) => {
+/** Todas las cifras del módulo para un año (o todo el histórico). La usan la pantalla y el informe PDF. */
+export async function calcularEstadisticas(anioConsulta) {
     const [todos, colaboradores, usuarios] = await Promise.all([
       listarIncapacidades({}),
       listarColaboradores({ soloReportables: true }),
@@ -70,7 +69,7 @@ export const EstadisticasController = {
     ]);
 
     const anios = [...new Set(todos.map((c) => c.fecha_inicio.slice(0, 4)))].sort().reverse();
-    const anio = /^\d{4}$/.test(req.query.anio || '') ? req.query.anio : null;
+    const anio = /^\d{4}$/.test(anioConsulta || '') ? String(anioConsulta) : null;
     const casos = anio ? todos.filter((c) => c.fecha_inicio.startsWith(anio)) : todos;
     const validos = casos.filter((c) => c.estado !== 'DADA_DE_BAJA'); // los dados de baja no cuentan como ausencia
     const hoy = new Date().toISOString().slice(0, 10);
@@ -180,12 +179,18 @@ export const EstadisticasController = {
     const por_rol = Object.entries(activos.reduce((acc, u) => ({ ...acc, [u.rol]: (acc[u.rol] || 0) + 1 }), {}))
       .map(([rol, total]) => ({ rol, total })).sort((a, b) => b.total - a.total);
 
-    res.json({
+    return {
       anio, anios,
       generales, por_etapa, por_tipo, por_area, por_entidad, por_diagnostico, por_canal, duracion,
       por_mes: porMes(validos, anio),
       dinero, cobro, monitoreo,
       usuarios: { activos: activos.length, inactivos: usuarios.length - activos.length, por_rol },
-    });
+    };
+}
+
+export const EstadisticasController = {
+  /** GET /api/estadisticas?anio=YYYY  (sin año: todo el histórico) */
+  resumen: asyncHandler(async (req, res) => {
+    res.json(await calcularEstadisticas(req.query.anio));
   }),
 };

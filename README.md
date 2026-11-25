@@ -42,7 +42,7 @@ sigi/
 
 ```bash
 npm install
-npm test                      # 12 pruebas de reglas de negocio
+npm test                      # pruebas de reglas de negocio y del generador de PDF
 npm run dev                   # API en http://localhost:4000
 
 cd app/views
@@ -66,6 +66,8 @@ Los usuarios de prueba (`auxiliar@sigi.demo`, `colaborador@sigi.demo`, `juridica
 | Monitoreo | Casos que pasan de 90, 120, 150 y 180 días sumando prórrogas, concepto de rehabilitación y suspensión de pago por nómina. | `MonitoreoController` |
 | Archivo | Soporte de liquidación, cruce con los expedientes físicos y transferencia a Gestión Documental. | `ArchivoController` |
 | Usuarios | Creación, edición, desactivación y eliminación de cuentas (solo administrador). | `UsuarioController` |
+| Estadísticas | Cifras de casos, ausentismo, cartera, cobro jurídico y días acumulados, por año. | `EstadisticasController` |
+| Informes | Descarga en PDF de los informes de estadísticas, ausentismo mensual (SG-SST), cartera con EPS y ARL y casos prolongados. | `InformeController` |
 
 Cada cambio de estado se valida contra el diagrama de estados (`app/models/enums.js`) y queda registrado en la tabla `bitacora`.
 
@@ -97,3 +99,16 @@ Reserva clínica: las epicrisis no se envían a la IA, a los análisis solo va e
 - Liquidación: los días 1 y 2 los paga la empresa al 100 % del IBC; del día 3 al 90 la EPS paga dos tercios del IBC y del 91 al 180, el 50 %. Desde el día 181 el trámite pasa al fondo de pensiones. En las prórrogas el porcentaje depende de los días acumulados. Las licencias las paga la EPS al 100 %.
 - Documentos: la epicrisis no se pide en enfermedad general de 2 días o menos, ni cuando la EPS ya hizo la transcripción.
 - Plazos de transcripción: cada entidad tiene el suyo. Las excepciones son 15 días para accidentes de tránsito en Salud Total y 30 días calendario para licencias de paternidad.
+
+## Informes en PDF
+
+`GET /api/informes/:tipo` devuelve el PDF para descargar; la pantalla **Informes** (menú Análisis) los ofrece con su filtro. Se arman en el servidor con `pdfkit` (`app/services/InformePdfService.js`) y usan las mismas funciones que cada pantalla, así las cifras coinciden.
+
+| Informe | Filtro | Quién lo descarga |
+|---|---|---|
+| `estadisticas` | `?anio=YYYY` (sin año: todo el histórico) | Auxiliar y Administración |
+| `ausentismo` | `?periodo=YYYY-MM` (por defecto, el mes actual) | Auxiliar y Administración |
+| `cartera` | `?anio=YYYY` | Auxiliar, Contabilidad y Administración |
+| `prolongados` | Ninguno: casos vigentes con 90 días o más a la fecha | Auxiliar y Administración |
+
+Cada descarga queda en la bitácora (`GENERAR_INFORME`). Los informes llevan datos personales y de salud: el pie de página lo recuerda (Ley 1581 de 2012).

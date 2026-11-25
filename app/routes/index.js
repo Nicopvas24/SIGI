@@ -14,6 +14,7 @@ import { MonitoreoController } from '../controllers/MonitoreoController.js';
 import { ArchivoController } from '../controllers/ArchivoController.js';
 import { UsuarioController } from '../controllers/UsuarioController.js';
 import { EstadisticasController } from '../controllers/EstadisticasController.js';
+import { InformeController } from '../controllers/InformeController.js';
 
 const subir = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 10 } });
 const evidencia = subir.single('evidencia');
@@ -94,6 +95,9 @@ rutas.post('/ia/prediccion-180', permitirRoles(AUX), MonitoreoController.predicc
 
 // ---------- Estadísticas ----------
 rutas.get('/estadisticas', permitirRoles(AUX), EstadisticasController.resumen);
+
+// ---------- Informes en PDF (cada informe revisa qué roles lo pueden pedir) ----------
+rutas.get('/informes/:tipo', permitirRoles(AUX, 'CONTABILIDAD'), InformeController.generar);
 
 // ---------- Archivo ----------
 rutas.get('/archivo/pagadas', permitirRoles(AUX, 'GESTION_DOCUMENTAL'), ArchivoController.pagadas);
