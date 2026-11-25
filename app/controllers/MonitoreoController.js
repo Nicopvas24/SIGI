@@ -10,7 +10,7 @@ const CERRADOS = ['ARCHIVADA', 'DADA_DE_BAJA'];
 const hoy = () => new Date().toISOString().slice(0, 10);
 
 /** Días acumulados de cada caso siguiendo su cadena de prórrogas, sin consultas adicionales. */
-function calcularAcumulados(casos) {
+export function calcularAcumulados(casos) {
   const porId = new Map(casos.map((c) => [c.id, c]));
   const memo = new Map();
   const acumulado = (c, profundidad = 0) => {
@@ -25,7 +25,7 @@ function calcularAcumulados(casos) {
 }
 
 /** El caso más reciente de cada cadena de prórrogas que sigue activa. */
-function casosVigentes(casos) {
+export function casosVigentes(casos) {
   const tieneProrroga = new Set(casos.map((c) => c.prorroga_de).filter(Boolean));
   return casos.filter((c) => !tieneProrroga.has(c.id) && !CERRADOS.includes(c.estado));
 }

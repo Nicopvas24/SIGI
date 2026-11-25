@@ -13,6 +13,7 @@ import Archivo from './pages/Archivo.jsx';
 import Colaboradores from './pages/Colaboradores.jsx';
 import Notificaciones from './pages/Notificaciones.jsx';
 import Usuarios from './pages/Usuarios.jsx';
+import Estadisticas from './pages/Estadisticas.jsx';
 
 function Protegida({ children }) {
   return sesion() ? children : <Navigate to="/login" replace />;
@@ -40,6 +41,7 @@ export default function App() {
         <Route path="colaboradores" element={<Colaboradores />} />
         <Route path="notificaciones" element={<Notificaciones />} />
         <Route path="usuarios" element={<Usuarios />} />
+        <Route path="estadisticas" element={<Estadisticas />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

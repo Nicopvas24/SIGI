@@ -13,6 +13,7 @@ import { ConciliacionController } from '../controllers/ConciliacionController.js
 import { MonitoreoController } from '../controllers/MonitoreoController.js';
 import { ArchivoController } from '../controllers/ArchivoController.js';
 import { UsuarioController } from '../controllers/UsuarioController.js';
+import { EstadisticasController } from '../controllers/EstadisticasController.js';
 
 const subir = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 10 } });
 const evidencia = subir.single('evidencia');
@@ -90,6 +91,9 @@ rutas.get('/monitoreo/colaboradores', permitirRoles(AUX), MonitoreoController.co
 rutas.get('/monitoreo/colaboradores/:id', permitirRoles(AUX), MonitoreoController.historialColaborador);
 rutas.post('/ia/resumen-colaborador/:id', permitirRoles(AUX), MonitoreoController.resumenColaboradorIA);
 rutas.post('/ia/prediccion-180', permitirRoles(AUX), MonitoreoController.prediccionIA);
+
+// ---------- Estadísticas ----------
+rutas.get('/estadisticas', permitirRoles(AUX), EstadisticasController.resumen);
 
 // ---------- Archivo ----------
 rutas.get('/archivo/pagadas', permitirRoles(AUX, 'GESTION_DOCUMENTAL'), ArchivoController.pagadas);
